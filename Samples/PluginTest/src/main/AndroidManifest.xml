@@ -64,6 +64,17 @@
         </activity>
 
         <activity
+            android:name="com.example.plugintest.activity.PluginForResultActivity">
+            <intent-filter>
+                <action
+                    android:name="com.example.plugintest.activity.PluginForResultActivity" />
+
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
             android:name="com.example.plugintest.activity.PluginFragmentTestActivity"
             android:windowSoftInputMode="stateAlwaysVisible">
             <intent-filter>

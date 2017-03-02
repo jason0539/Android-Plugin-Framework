@@ -44,6 +44,7 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
         findViewById(R.id.sendbroadcast).setOnClickListener(this);
         findViewById(R.id.notification).setOnClickListener(this);
         findViewById(R.id.startActivity).setOnClickListener(this);
+        findViewById(R.id.startActivityForResult).setOnClickListener(this);
 
         if (!PluginManagerHelper.isInstalled("com.example.plugintest")) {
             Toast.makeText(this, "插件未安装:com.example.plugintest", Toast.LENGTH_SHORT).show();
@@ -102,6 +103,8 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
             testNotification();
         } else if (viewId == R.id.startActivity) {
             testStartActivity1();
+        } else if (viewId == R.id.startActivityForResult) {
+            testStartActivityForResult();
         }
 
     }
@@ -146,6 +149,18 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
         //也可以直接构造Intent，指定打开插件中的某个Activity
         Intent intent = new Intent("test.abc");
         startActivity(intent);
+    }
+
+    private void testStartActivityForResult() {
+        //也可以直接构造Intent，指定打开插件中的某个Activity
+        Intent intent = new Intent("com.example.plugintest.activity.PluginForResultActivity");
+        startActivityForResult(intent,110);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Toast.makeText(this,"requestCode = " + requestCode + ", resultCode = " + resultCode,Toast.LENGTH_SHORT).show();
     }
 
     @Override

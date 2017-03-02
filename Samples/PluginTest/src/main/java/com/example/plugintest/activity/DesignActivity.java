@@ -17,7 +17,6 @@ import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.app.AppCompatDelegate;
 import android.support.v7.widget.Toolbar;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -74,9 +73,9 @@ public class DesignActivity extends AppCompatActivity {
 
 				View snapBarContentView = snackbar.getView();
 				snapBarContentView.setBackgroundColor(getResources().getColor(R.color.text_color));
-				TextView textView = (TextView) snapBarContentView.findViewById(com.example.pluginmain.R.id.snackbar_text);
-				textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
-				snackbar.show();
+//				TextView textView = (TextView) snapBarContentView.findViewById(com.example.pluginmain.R.id.snackbar_text);
+//				textView.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+//				snackbar.show();
 			}
 		});
 
