@@ -7,21 +7,26 @@ import javax.xml.parsers.SAXParser
 import javax.xml.parsers.SAXParserFactory
 import java.util.jar.JarEntry
 import java.util.jar.JarOutputStream
+import java.util.regex.Pattern
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
-
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
-//在宿主脚本中apply此脚本, 此脚本一共做了5件事
+//在宿主脚本中apply此脚本, 此脚本一共做了6件事
 //1、编译完成后导出所有资源id，即aaptOptions.additionalParameters这个配置干的事情, 下面第4步需要此文件
 //2、编译宿主资源时插入public.xml，用来控制宿主资源id分组
 //3、编译宿主资源编译完成后导出后缀为.ap_的资源包，此资源包在编译非独立插件时需要此包
 //4、编译完成后根据资源中间文件以及导出的资源id表生成一份主题patch包，编译非独立插件时需要此包
 //5、编译完成后导出宿主的jar，包括宿主的src和其依赖的所有class, 编译非独立插件时需要此包
+//6、编译完成后导出宿主混淆后的jar，包括宿主的src和其依赖的所有class, 编译非独立插件时若插件需要混淆则需要此包
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
+
+//getProperties()会从ext {} 配置下取值
+def hasExtPluginProcessName = getProperties().containsKey("pluginProcess")
+def pluginProcessName = getProperties().get("pluginProcess")
 
 //第1件事
 android.aaptOptions.additionalParameters("-P", project.buildDir.absolutePath + "/outputs/generated_exported_all_resouces.xml")
@@ -58,8 +63,57 @@ afterEvaluate {
                 httpConn.disconnect()
             }
         }
+
+        //def buildTypeName =  variant.buildType.name
+        def varDirName =  variant.dirName
+
         //第3件事
         for (baseVariant in variant.outputs) {
+
+            def manifestFilePath = baseVariant.processResources.manifestFile.absolutePath;
+            def tastName = baseVariant.processResources.name
+
+            baseVariant.processManifest.doLast {
+
+                File manifestFile = new File(manifestFilePath)
+
+                println '正在检查Manifest中的插件配置是否正确' + manifestFilePath
+
+                def originManifestContent = manifestFile.getText('UTF-8')
+                if (originManifestContent.contains("{applicationId}")) {
+                    throw new Exception("宿主build.gradle未配置android.defaultConfig.applicationId")
+                }
+
+                def pattern = Pattern.compile("versionName\\s*=\\s*\"(.+?)\"");
+                def matcher = pattern.matcher(originManifestContent);
+                if (matcher.find()) {
+                    def versionName = matcher.group(1)
+                    //File hostInfo = new File("${project.buildDir}/outputs/HostInfo-" + tastName.replace("process","").replace("Resources", "") + ".prop")
+                    //没有单独命名，有多个favor时文件会覆盖
+                    File hostInfo = new File("${project.buildDir}/outputs/HostInfo.prop")
+                    if (hostInfo.exists()) {
+                        hostInfo.delete()
+                    }
+                    println '正在生成文件' + hostInfo.absolutePath
+                    hostInfo.write("#Manifest CREATED AT " + new Date().format("yyyy-MM-dd HH:mm::ss"))
+                    hostInfo.append("\nhost.versoinCode=" + android.defaultConfig.versionCode)
+                    //versionName可能有后缀，所以以Manifest中为准
+                    hostInfo.append("\nhost.versionName=" + versionName)
+                }
+
+                //指定插件进程名，设置为空串或者null即是和宿主同进程
+                //不设置即使用默认进程(:plugin)
+                if (hasExtPluginProcessName) {
+                    def customPluginProcessName = "";
+                    if (pluginProcessName != null) {
+                        customPluginProcessName = "android:process=\"" + pluginProcessName + "\""
+                    }
+                    def modifyedManifestContent = originManifestContent.replaceAll("android:process=\":plugin\"", customPluginProcessName)
+                    manifestFile.write(modifyedManifestContent, 'UTF-8')
+                    baseVariant.processResources.manifestFile = manifestFile
+                }
+            }
+
             def processResourcesTask = baseVariant.getProcessResources();
             processResourcesTask.doLast {
                 println '编译宿主资源编译完成后导出后缀为.ap_的资源包，此资源包在编译非独立插件时需要此包'
@@ -72,13 +126,16 @@ afterEvaluate {
         }
 
         //第5件事
-        org.gradle.api.tasks.compile.JavaCompile javaCompile = variant.javaCompile;
-        String buildType = variant.buildType.name
+        def org.gradle.api.tasks.compile.JavaCompile javaCompile = variant.javaCompile;
+        def String buildType = variant.buildType.name
+
         javaCompile.doLast {
 
-            println "Merge Jar After Task " + javaCompile.name
+            def flavorBuildType = javaCompile.name.replace("compile", "").replace("JavaWithJavac", "");
+            def flavor = flavorBuildType.toLowerCase().replace(buildType, "")
+            println "Merge Jar After Task " + javaCompile.name + " buildType is " + buildType
 
-            File jarFile = new File(project.buildDir, "outputs/" + project.name + "-" + buildType + ".jar")
+            File jarFile = new File(project.buildDir, "outputs/" + project.name + "-" + flavorBuildType + ".jar")
             if (jarFile.exists()) {
                 jarFile.delete()
             }
@@ -98,9 +155,18 @@ afterEvaluate {
                     jarMerger.addJar(jarPath);
                     //jarMerger.addFolder(directoryInput.getFile());
                 }
-                File classes = new File(buildDir, 'intermediates/packaged/' + buildType + "/classes.jar");
+                File classes = new File(buildDir, 'intermediates/packaged/' + (flavor.equals("")?"":(flavor + "/")) + buildType + "/classes.jar");
+
+                println "classes path is " + classes.absolutePath
+
                 if (!classes.exists()) {
-                    tasks.getByName("jar" + buildType.substring(0, 1).toUpperCase()+ buildType.replaceFirst("\\w","") +  "Classes").execute()
+                    try {
+                        tasks.getByName("jar" + flavorBuildType +  "Classes").execute()
+                    } catch(Exception e) {
+                        println "fail to create jar for task " + javaCompile.name
+                    }
+                } else {
+                    println "classes path not exist " + classes.absolutePath
                 }
                 if (classes.exists()) {
                     jarMerger.addJar(classes)
@@ -113,6 +179,41 @@ afterEvaluate {
 
             println "Merge Jar Finished, Jar is at " + jarFile.absolutePath
         }
+
+        //处理混淆，这里保存混淆以后dex之前的jar包作为基线包备用
+        def proguardTask = project.tasks.findByName("transformClassesAndResourcesWithProguardFor${variant.name.capitalize()}")
+        def variantName = variant.name
+        if (proguardTask) {
+            proguardTask.doFirst {
+                println "开始混淆任务" + variantName.capitalize()
+            }
+            proguardTask.doLast {
+                println "混淆完成" + variantName.capitalize()
+                boolean isFind = false;
+                proguardTask.outputs.files.files.each { File file->
+                    //http://blog.csdn.net/sbsujjbcy/article/details/50839263
+                    //build/intermediates/transforms/proguard/anzhi/release/jars/3/1f/main.jar
+                    project.logger.error "file outputs=>${file.absolutePath}"
+                    String keyword = File.separator + "transforms" + File.separator + "proguard" + File.separator;
+                    println String.valueOf(file.absolutePath.contains(keyword)) + ", " + String.valueOf(file.absolutePath.endsWith(buildType))
+                    if (file.absolutePath.contains(keyword) && file.absolutePath.endsWith(buildType)) {
+
+                        isFind = true;
+                        println "导出混淆后的宿主jar包" + "${project.buildDir}/outputs/" + "host_" + variantName + "_obfuscated" + ".jar"
+
+                        copy {
+                            from file.absolutePath + "/jars/3/1f/main.jar"
+                            into("${project.buildDir}/outputs/")
+                            rename('main', "host_" + variantName + "_obfuscated")
+                        }
+                    }
+                }
+                if (!isFind) {
+                    throw "obfuscated jar file not found, please check."
+                }
+            }
+        }
+
     }
 
     tasks.each { task ->
@@ -120,7 +221,13 @@ afterEvaluate {
             task.doFirst {
                 def buildFavType = task.name.replace("generate", "").replace("Sources", "")
                 println '编译宿主ap完成后根据资源中间文件以及导出的资源id表生成一份主题patch包，编译非独立插件时需要此包 buildFavType = ' + buildFavType
-                createThemePatch(buildFavType.toLowerCase())
+
+                //脚本不熟，将就用吧。。。
+                if (buildFavType.endsWith("Debug")) {
+                    createThemePatch(buildFavType.replace("Debug", "").toLowerCase(), "debug");
+                } else if (buildFavType.endsWith("Release")) {
+                    createThemePatch(buildFavType.replace("Release", "").toLowerCase(), "release");
+                }
             }
         }
     }
@@ -134,7 +241,7 @@ afterEvaluate {
 }
 
 //导出主题patch
-def createThemePatch(String buildType) {
+def createThemePatch(String flavor, String buildType) {
 
     File patchDir = new File(project.buildDir.absolutePath + "/outputs/theme_patch/" + buildType);
     patchDir.mkdirs();
@@ -144,6 +251,10 @@ def createThemePatch(String buildType) {
 
     println "export from " + generatedRes + " to " + dest
 
+    if (!generatedRes.exists()) {
+        throw new FileNotFoundException("File Not Found : " + generatedRes.absolutePath)
+    }
+
     def packageName = android.defaultConfig.applicationId
     if (android.buildTypes[buildType].applicationIdSuffix != null) {
         packageName = packageName + android.buildTypes[buildType].applicationIdSuffix;
@@ -151,7 +262,7 @@ def createThemePatch(String buildType) {
 
     ThemeProcessor.exportThemeStyle(generatedRes, dest, packageName)
 
-    String mergedResDir = "${project.buildDir}/intermediates/res/merged/" + buildType + "/";
+    String mergedResDir = "${project.buildDir}/intermediates/res/merged/" + (flavor.equals("")?"":(flavor + "/")) + buildType + "/";
     FileTree allxmlFiles = fileTree(dir: mergedResDir)
     allxmlFiles.include 'values/values*.xml', 'values-v1*/values-v1*.xml', 'values-v2*/values-v2*.xml', 'values-*-v1*/values-*-v1*.xml', 'values-*-v4/values-*-v4.xml', 'values-land/values-land.xml', 'values-*-v2*/values-*-v2*.xml', 'values-*-v8/values-*-v8.xml'
 

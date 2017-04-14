@@ -6,9 +6,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -31,6 +33,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -69,6 +72,13 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(pluginInstallEvent, new IntentFilter(PluginCallback.ACTION_PLUGIN_CHANGED));
 
         refreshListView();
+
+        PackageManager manager = getPackageManager();
+        Intent intent = new Intent(Intent.ACTION_MAIN, null);
+        intent.addCategory(Intent.CATEGORY_LAUNCHER);
+        List<ResolveInfo> infos = manager.queryIntentActivities(intent, 0);
+
+        Log.e("xx", "infos=" + (infos==null?"0":infos.size()));
     }
 
 	private void initView() {
@@ -271,7 +281,9 @@ public class MainActivity extends AppCompatActivity {
 			return "失败: 插件不存在";
 		} else if (code == PluginManagerHelper.REMOVE_FAIL) {
 			return "失败: 删除插件失败";
-		} else {
+		} else if (code == PluginManagerHelper.HOST_VERSION_NOT_SUPPORT_CURRENT_PLUGIN) {
+            return "失败: 插件要求的宿主版本和当前宿主版本不匹配";
+        } else {
 			return "失败: 其他 code=" + code;
 		}
 	}
