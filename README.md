@@ -4,7 +4,7 @@ README: [中文](https://github.com/limpoxe/Android-Plugin-Framework/blob/master
 
 Android-Plugin-Framework是一个Android插件化框架，用于通过动态加载的方式免安装运行插件apk
 
-#### 最新版本: 0.0.51-snapshot
+#### 最新版本: 0.0.53-snapshot
 
 #### 项目结构
 
@@ -21,18 +21,21 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 | 容器 | 宿主中由框架创建的插件运行环境 |
 | 插件 | 被宿主加载运行的apk |
 | 独立插件 | 运行时不依赖宿主的插件，自身可以是完整app，也可以不是一个完整app |
-| ```非独立插件``` | 运行时依赖宿主（类、资源）的插件，自身不是一个完整app |
+| 非独立插件 | 运行时依赖宿主（类、资源）的插件，自身不是一个完整app |
 | 插件进程 | 插件运行时所在进程，也即容器所在进程 |
 
-独立插件和非独立插件```不以是否可以单独安装运行来区分，仅以是否依赖宿主的类和资源来区分```。
+独立插件和非独立插件, 不以是否可以单独安装运行来区分，仅以是否依赖宿主的类和资源来区分。
 
-```此项目的主要目的是为了运行非独立插件，而不是任意第三方app```。非独立插件相比任意三方app来说，可以预见到其使用了哪些系统api和特性，
-而且所有行为都是可以预测的。而任意三方app是不可预测的，这一区别决定了框架是否需要全量hook和支持所有系统api和特性。此框架的做法是按
-需hook。
+#### 此项目主要目标是为了运行非独立插件，而不是任意第三方app。
+
+尽管此框架支持独立插件，但目标并不是为了支持任意三方app，不同于平行空间或应用分身之类的产品。
+非独立插件相比任意三方app来说，可以预见到其使用了哪些系统api和特性，而且所有行为都是可以预测的。而任意三方app是不可预测的。
+框架的做法是按需hook，即需要用到哪些系统特性和api，就对哪些特性和api提供支持。这种做法对开发非独立插件和二方独立插件而言完全足够。
+目前已经添加了对常用特性和api的支持，如需使用的api还未支持请联系作者。
 
 #### FEATURE
 - 框架透明, 插件开发与普通apk开发无异，无约定约束
-- 支持非独立插件和独立插件
+- 支持非独立插件和独立插件(非任意三方)
 - 支持四大组件/Application/Fragment/Accessibility/LaunchMode/so
 - 支持插件Theme/Style,宿主Theme/Style,轻松支持基于主题属性的皮肤切换
 - 支持插件发送Notification/时在RemoteViews中携带插件中的资源（只支持5.x及以上, 且不支持miui8）
@@ -69,7 +72,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 ```
     dependencies {
         //请务必使用@aar结尾，以中断依赖传递
-        compile('com.limpoxe.fairy:FairyPlugin:0.0.51-snapshot@aar')
+        compile('com.limpoxe.fairy:FairyPlugin:0.0.53-snapshot@aar')
         //可选，用于支持插件全局函数式服务，不使用全局函数式服务不需要添加此依赖
         //compile('com.limpoxe.support:android-servicemanager:1.0.5@aar')
     }
@@ -92,10 +95,12 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
         //框架日志开关
-        LogUtil.setEnable(true);
+        FairyGlobal.setLogEnable(true);
         //这个方法是设置首次加载插件时, 定制loading页面的UI, 不传即默认没有loading页
         //在宿主中创建任意一个layout传进去即可
-        PluginLoader.setLoadingResId(R.layout.loading);
+        FairyGlobal.setLoadingResId(R.layout.loading);
+        //是否支持插件中使用本地html
+        FairyGlobal.setLocalHtmlenable(true);
         //初始化框架
         PluginLoader.initLoader(this);
     }
@@ -135,7 +140,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 ```       
     <manifest android:sharedUserId="这里填写宿主工程包名"/>
 ```       
-此配置```与其原始含义无关```。插件框架识别一个插件是否为独立插件，即是根据插件的manifest文件中的android:sharedUserId配置来判断，
+此配置```与其原始含义无关```。插件框架识别一个插件是否为独立插件，是根据插件的manifest文件中的android:sharedUserId配置来判断，
 将android:sharedUserId设置为宿主的packageName，则表示为非独立插件，不设置或者设置为其他值，则表示为独立插件。
                  
 3、在build.gradle中添加如下2个配置
@@ -170,11 +175,15 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 #### Demo编译方法
     
    a）如果是命令行中：
+   
    cd  Android-Plugin-Framework
+   
    ./gradlew clean
+   
    ./gradlew assembleDebug
 
    b）如果是studio中：
+   
    打开studio右侧gradle面板区，点clean、点assembleDebug。不要使用菜单栏的菜单编译。
 
    重要：
@@ -191,7 +200,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
    或者也可将插件apk复制到sdcard，然后在宿主程序中调用PluginLoader.installPlugin("插件apk绝对路径")进行安装。
 
         
-#其他指南
+# 其他指南
 1. 如何使非独立插件依赖其他插件
 
    例：插件A依赖插件B，则需在插件A的manifest文件中的application节点下增加如下配置：
@@ -322,14 +331,15 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
          
          然而，在插件中调用getPackageName等等相应的系统api，得到的是插件的packageName，插件的meta-data，以及插件的signatures。
          
-         所以，在sdk平台上注册appkey时直接使用插件的包名，签名，然后将appkey的配置埋入插件的meta-data, 此种情况无需特别配置。插件集成此sdk即可正常使用。
+         所以，在sdk平台上注册appkey时直接使用插件的包名，签名，然后将appkey的配置埋入插件的meta-data, 
+         此种情况无需特别配置。插件集成此sdk即可正常使用，例如百度地图SDK即符合此种情形。
          
-         但是，实际中仍然会存在下面2种情况：
+         但是，实际应用中仍然会存在下面2种情况：
                1、可能sdk需要通过其自身的app来进行校验或者交互。例如微信分享sdk，它需要唤醒微信App，再由微信App和宿主App进行验证和交互（第三方app要唤起插件中的静态组件必须由宿
                   主程序进行桥接，方法请参看wxsdklibrary工程的用法），绕过了插件。
                   此种sdk在平台上注册appkey时必须使用宿主的包名
                
-               2、可能由于特殊原因，在sdk平台上注册appkey时已经使用了宿主的包名，不能在更换使用插件的包名进行注册。
+               2、可能由于特殊原因，在sdk平台上注册appkey时已经使用了宿主的包名，业务上不能再更换使用插件的包名进行注册。
                
                以上两种情况，sdk在拿到插件的Context以后（通常是在sdk的init方法里面传入的插件Application），
                sdk借助插件Context取不到正确的packageName、meta-data、signatures。正确的值全部在宿主中，插件拿到的全部是插件自己的。
@@ -337,7 +347,10 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
          sdk在获取packageName、meta-data、signatures这3个信息，都是通过传入的Context调用其getXXXX或者context.getPackageManager().getXXX来获取。
          因此，针对这两种case，需要在初始化插件sdk是，传入fakeContext而不是插件的Context来欺骗sdk，使其能拿到正确信息。
         
-         在demo中，微信sdk插件的FakeContext，和百度地图sdk的FakeContext，即是用来解决上面两种情况下的问题。
+         在demo中，微信sdk插件的FakeContext，即是用来解决上面所说的第一种情况。
+         百度地图sdk的FakeContext，即是用来解决上面所说的第二种情况（实际上百度地图SDK可以直接使用插件包去平台上注册，
+         不需要使用宿主注册，demo这里仅仅作为验证演示，特意使用了宿主注册appkey）。
+         
          demo中的fakeContext重写了需要的相关方法。
          
          如要使用此类插件，请务必先完全理解上述解释，以及为何使用FakeContext可以达成目的。然后遇到各种相关问题都可迎刃而解。
@@ -370,14 +383,35 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
          这里需要注意的是插件开启混淆以后，需要在插件的proguard里面增加对插件Fragment的keep，否则如果此fragment没有在插件自身
          使用，仅作为嵌入宿主使用，则progurad可能误以为这个类在插件中没有被使用过而被精简掉
              
+13. 如何使外部应用或者系统可以直接通过插件组件的Intent打开插件
+
+    由于插件并没有正常安装到系统中，插件组件的Intent不能被系统识别，因此外部应用或者系统需要直接唤起插件组件时，需要将插件Intent在宿主的Manifest中        
+    也预置一份，并在IntentFilter增加STUB_EXACT配置，如：
+
+        <receiver android:name="com.example.plugintest.receiver.BootCompletedReceiver"
+              android:process=":plugin">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.ACTION_SHUTDOWN"/>
+            </intent-filter>
+            <!--下面是额外添加的配置项，作用是使得框架将此组件配置识别为插件组件 -->
+            <intent-filter>
+                <action
+                    android:name="${applicationId}.STUB_EXACT" />
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
+        
+       可以参考demo        
+
 
 # 注意事项
 
     1、非独立插件中的class不能同时存在于宿主和插件程序中
       
-       如果插件和宿主共享依赖库，常见的如supportv4，那么编译插件的时候不可将共享库编译到插件当中，
-       包括共享库的代码以及R文件，只需在编译时以provided方式添加到classpath中，公共库仅参与编译，不参与打包，
-       且插件中如果要使用共享依赖库中的资源，需要使用共享库的R文件来进行引用。参看demo。
+       如果插件和宿主共享依赖库，常见的如supportv4，那么编译插件的时候不可将共享库编译到插件当中，包括共享库的代码以及R文件。
+       只需在编译时以provided方式添加到classpath中，公共库仅参与编译，不参与打包。参看demo。
     
     2、若插件中包含so，则需要在宿主的相应目录下添加至少一个so文件，以确保插件和宿主支持的so种类完全相同
     
@@ -406,12 +440,12 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
        
     以上所有内容及更多详情可以参考Demo
   
-##其他
+## 其他
 1. [原理简介](https://github.com/limpoxe/Android-Plugin-Framework/wiki/%E5%8E%9F%E7%90%86%E7%AE%80%E4%BB%8B)
 2. [使用Public.xml的坑和填坑](https://github.com/limpoxe/Android-Plugin-Framework/wiki/%E4%BD%BF%E7%94%A8Public.xml%E7%9A%84%E5%9D%91%E5%92%8C%E5%A1%AB%E5%9D%91).
 3. [更新记录](https://github.com/limpoxe/Android-Plugin-Framework/wiki/%E6%9B%B4%E6%96%B0%E8%AE%B0%E5%BD%95)
 
-##联系作者：
+## 联系作者：
   Q：15871365851，添加时请注明插件开发
 
   Q群：116993004、207397154(已满)，重要：添加前请务必仔细阅读此ReadMe！请务必仔细阅读Demo！

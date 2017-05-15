@@ -1,6 +1,7 @@
 package com.limpoxe.fairy.core;
 
 import android.content.ComponentName;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
@@ -24,17 +25,20 @@ public class PluginIntentResolver {
 	public static final String CLASS_PREFIX_RECEIVER = "#";//字符串越短,判断时效率越高
 	public static final String CLASS_PREFIX_SERVICE = "%";//字符串越短,判断时效率越高
 
-	public static void resolveService(Intent intent) {
+    public static final String CLASS_PREFIX_RECEIVER_NOT_FOUND = CLASS_PREFIX_RECEIVER + "NOT_FOUND";
+    public static final String CLASS_PREFIX_SERVICE_NOT_FOUND = CLASS_PREFIX_SERVICE + "NOT_FOUND";
+
+    public static void resolveService(Intent intent) {
 		ArrayList<String> classNameList = matchPlugin(intent, PluginDescriptor.SERVICE);
 		if (classNameList != null && classNameList.size() > 0) {
             //TODO 只取第一个，忽略了多Service匹配到同一个Intent的情况
             String stubServiceName = PluginProviderClient.bindStubService(classNameList.get(0));
 			if (stubServiceName != null) {
-				intent.setComponent(new ComponentName(PluginLoader.getApplication().getPackageName(), stubServiceName));
+				intent.setComponent(new ComponentName(FairyGlobal.getApplication().getPackageName(), stubServiceName));
 			}
 		} else {
 			if (intent.getComponent() != null && null != PluginManagerHelper.getPluginDescriptorByPluginId(intent.getComponent().getPackageName())) {
-				intent.setComponent(new ComponentName(PluginLoader.getApplication().getPackageName(), intent.getComponent().getClassName()));
+				intent.setComponent(new ComponentName(FairyGlobal.getApplication().getPackageName(), intent.getComponent().getClassName()));
 			}
 		}
 	}
@@ -47,15 +51,15 @@ public class PluginIntentResolver {
 		if (classNameList != null && classNameList.size() > 0) {
 			for(String className: classNameList) {
 				Intent newIntent = new Intent(intent);
-				newIntent.setComponent(new ComponentName(PluginLoader.getApplication().getPackageName(),
-                        PluginProviderClient.bindStubReceiver()));
+				newIntent.setComponent(new ComponentName(FairyGlobal.getApplication().getPackageName(),
+                        PluginProviderClient.bindStubReceiver(null)));
 				//hackReceiverForClassLoader检测到这个标记后会进行替换
 				newIntent.setAction(className + CLASS_SEPARATOR + (intent.getAction() == null ? "" : intent.getAction()));
 				result.add(newIntent);
 			}
 		} else {
 			if (intent.getComponent() != null && null != PluginManagerHelper.getPluginDescriptorByPluginId(intent.getComponent().getPackageName())) {
-				intent.setComponent(new ComponentName(PluginLoader.getApplication().getPackageName(), intent.getComponent().getClassName()));
+				intent.setComponent(new ComponentName(FairyGlobal.getApplication().getPackageName(), intent.getComponent().getClassName()));
 			}
 		}
 
@@ -65,38 +69,66 @@ public class PluginIntentResolver {
 		return result;
 	}
 
-	/* package */static Class resolveReceiverForClassLoader(final Object msgObj) {
-		HackReceiverData hackReceiverData = new HackReceiverData(msgObj);
-		Intent intent = hackReceiverData.getIntent();
-		if (intent.getComponent().getClassName().equals(PluginProviderClient.bindStubReceiver())) {
-			String action = intent.getAction();
-			LogUtil.v("action", action);
-			if (action != null) {
-				String[] targetClassName = action.split(CLASS_SEPARATOR);
-				@SuppressWarnings("rawtypes")
-				Class clazz = PluginLoader.loadPluginClassByName(targetClassName[0]);
-				if (clazz != null) {
-					intent.setExtrasClassLoader(clazz.getClassLoader());
-					//由于之前intent被修改过 这里再吧Intent还原到原始的intent
-					if (targetClassName.length > 1) {
-						intent.setAction(targetClassName[1]);
-					} else {
-						intent.setAction(null);
-					}
-				}
-				// PluginClassLoader检测到这个特殊标记后会进行替换
-				intent.setComponent(new ComponentName(intent.getComponent().getPackageName(),
-						CLASS_PREFIX_RECEIVER + targetClassName[0]));
+	/* package */static Context resolveReceiverForClassLoader(final Object msgObj) {
 
-				if (Build.VERSION.SDK_INT >= 21) {
-					if (intent.getExtras() != null) {
-						hackReceiverData.setIntent(new PluginReceiverIntent(intent));
-					}
-				}
+        if (ProcessUtil.isPluginProcess()) {
 
-				return clazz;
-			}
-		}
+            PluginInjector.hackHostClassLoaderIfNeeded();
+
+            HackReceiverData hackReceiverData = new HackReceiverData(msgObj);
+            Intent intent = hackReceiverData.getIntent();
+            String className = intent.getComponent().getClassName();
+            String stubClassName = PluginProviderClient.bindStubReceiver(className);
+            if (className.equals(stubClassName)) {
+                String realReceiverClassName = null;
+                String[] targetClassName = null;
+                if (PluginProviderClient.isExact(className, PluginDescriptor.BROADCAST)) {
+                    realReceiverClassName = className;
+                } else {
+                    String action = intent.getAction();
+                    if (action != null) {
+                        targetClassName = action.split(CLASS_SEPARATOR);
+                        realReceiverClassName = targetClassName[0];
+                    }
+                }
+                if (realReceiverClassName == null) {
+                    return null;
+                }
+
+                @SuppressWarnings("rawtypes")
+                Class clazz = PluginLoader.loadPluginClassByName(realReceiverClassName);
+
+                if (clazz != null) {
+                    intent.setExtrasClassLoader(clazz.getClassLoader());
+                    if (targetClassName != null) {
+                        //由于之前intent被修改过 这里再吧Intent还原到原始的intent
+                        if (targetClassName.length > 1) {
+                            intent.setAction(targetClassName[1]);
+                        } else {//length等于1的情况是因为原始的intent可能不是通过Action过来的，而是直接通过Component过来的
+                            intent.setAction(null);
+                        }
+                    } else {
+                        //isExact 无需对intent进行恢复
+                    }
+
+                    // HostClassLoader检测到这个特殊标记后会进行替换
+                    intent.setComponent(new ComponentName(intent.getComponent().getPackageName(), CLASS_PREFIX_RECEIVER + realReceiverClassName));
+
+                    if (Build.VERSION.SDK_INT >= 21) {
+                        if (intent.getExtras() != null) {
+                            hackReceiverData.setIntent(new PluginReceiverIntent(intent));
+                        }
+                    }
+                    return PluginLoader.getDefaultPluginContext(clazz);
+                } else {
+                    //在未安装插件的情况下收到了由宿主桥接到插件的广播，例如开关机广播，会到这里来
+                    if(targetClassName == null) {
+                        LogUtil.w("返回容错标记， 交给HostClassLoader处理");
+                        intent.setComponent(new ComponentName(intent.getComponent().getPackageName(), CLASS_PREFIX_RECEIVER_NOT_FOUND));
+                    }
+                }
+            }
+        }
 		return null;
 	}
 
@@ -120,9 +152,9 @@ public class PluginIntentResolver {
 				info.name =  CLASS_PREFIX_SERVICE + targetClassName;
 			} else if (PluginProviderClient.isStub(info.name)) {
 				String dumpString = PluginProviderClient.dumpServiceInfo();
-				LogUtil.w("hackServiceName 没有找到映射关系, 可能映射表出了异常", info.name, dumpString);
-
-				info.name = CLASS_PREFIX_SERVICE + "null";
+				LogUtil.w("没有找到映射关系, 可能映射表出了异常", info.name, dumpString);
+                LogUtil.w("返回容错标记， 交给HostClassLoader处理");
+                info.name = CLASS_PREFIX_SERVICE_NOT_FOUND;
 			} else {
 				LogUtil.v("是宿主service", info.name);
 			}
@@ -148,7 +180,7 @@ public class PluginIntentResolver {
                     pluginActivityInfo.getScreenOrientation());
 
 			intent.setComponent(
-					new ComponentName(PluginLoader.getApplication().getPackageName(), stubActivityName));
+					new ComponentName(FairyGlobal.getApplication().getPackageName(), stubActivityName));
 			//PluginInstrumentationWrapper检测到这个标记后会进行替换
 			intent.setAction(className + CLASS_SEPARATOR + (intent.getAction()==null?"":intent.getAction()));
 		} else {
@@ -156,7 +188,7 @@ public class PluginIntentResolver {
                 String targetPackageName = intent.getComponent().getPackageName();
                 PluginDescriptor pluginDescriptor = PluginManagerHelper.getPluginDescriptorByPluginId(targetPackageName);
                 if (pluginDescriptor != null) {
-                    intent.setComponent(new ComponentName(PluginLoader.getApplication().getPackageName(), intent.getComponent().getClassName()));
+                    intent.setComponent(new ComponentName(FairyGlobal.getApplication().getPackageName(), intent.getComponent().getClassName()));
                 }
             }
         }
@@ -186,7 +218,7 @@ public class PluginIntentResolver {
 			packageName = intent.getComponent().getPackageName();
 		}
 		//如果指定了packname，就不用遍历插件列表了
-		if (packageName != null && !packageName.equals(PluginLoader.getApplication().getPackageName())) {
+		if (packageName != null && !packageName.equals(FairyGlobal.getApplication().getPackageName())) {
 			PluginDescriptor pluginDescriptor = PluginManagerHelper.getPluginDescriptorByPluginId(packageName);
 			if (pluginDescriptor != null) {
                 result = pluginDescriptor.matchPlugin(intent, type);

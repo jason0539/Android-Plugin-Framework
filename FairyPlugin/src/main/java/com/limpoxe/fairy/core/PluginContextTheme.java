@@ -42,7 +42,7 @@ public class PluginContextTheme extends PluginBaseContextWrapper {
 	Resources.Theme mTheme;
 	private LayoutInflater mInflater;
 	private ApplicationInfo mApplicationInfo;
-	Resources mResources;
+	final Resources mResources;
 	private final ClassLoader mClassLoader;
 	private Application mPluginApplication;
 	protected final PluginDescriptor mPluginDescriptor;
@@ -161,12 +161,12 @@ public class PluginContextTheme extends PluginBaseContextWrapper {
 	//@hide tabactivity会用到
 	public String getBasePackageName() {
 		//ViewRootImpl中会调用这个方法, 这是个hide方法.
-		return PluginLoader.getApplication().getPackageName();
+		return FairyGlobal.getApplication().getPackageName();
 	}
 
 	////@hide toast，ITelephony等服务会用到
 	public String getOpPackageName() {
-		return PluginLoader.getApplication().getPackageName();
+		return FairyGlobal.getApplication().getPackageName();
 	}
 
 	@Override

@@ -1,9 +1,11 @@
 package com.limpoxe.fairy.core;
 
+import android.app.Application;
 import android.content.Context;
 import android.content.res.AssetManager;
 import android.content.res.Resources;
 
+import com.limpoxe.fairy.content.LoadedPlugin;
 import com.limpoxe.fairy.content.PluginDescriptor;
 import com.limpoxe.fairy.core.android.HackAssetManager;
 import com.limpoxe.fairy.core.compat.CompatForWebViewFactoryApi21;
@@ -85,12 +87,14 @@ public class PluginCreator {
 
 				return pluginRes;
 			} catch (Exception e) {
-				e.printStackTrace();
-			}
+                LogUtil.printException("创建插件res失败" + absolutePluginApkPath, e);
+            }
 		} else {
 			LogUtil.e("插件文件不存在", absolutePluginApkPath);
-		}
-
+            LogUtil.e("插件文件可能已损坏，正在卸载此插件...");
+            PluginManagerHelper.remove(pluginDescriptor.getPackageName());
+            LogUtil.e("卸载完成");
+        }
 		return null;
 	}
 
@@ -205,4 +209,48 @@ public class PluginCreator {
 												  DexClassLoader pluginClassLoader) {
 		return new PluginContextTheme(pluginDescriptor, base, pluginRes, pluginClassLoader);
 	}
+
+    /*package*/ static Context getNewPluginApplicationContext(String pluginId) {
+        PluginDescriptor pluginDescriptor = PluginManagerHelper.getPluginDescriptorByPluginId(pluginId);
+        if (pluginDescriptor == null) {
+            return null;
+        }
+        //插件可能尚未初始化，确保使用前已经初始化
+        LoadedPlugin plugin = PluginLauncher.instance().startPlugin(pluginDescriptor);
+
+        if (plugin != null) {
+            PluginContextTheme newContext = (PluginContextTheme)PluginCreator.createPluginContext(
+                    ((PluginContextTheme) plugin.pluginContext).getPluginDescriptor(),
+                    FairyGlobal.getApplication().getBaseContext(), plugin.pluginResource, plugin.pluginClassLoader);
+
+            newContext.setPluginApplication(plugin.pluginApplication);
+
+            newContext.setTheme(pluginDescriptor.getApplicationTheme());
+
+            return newContext;
+        }
+
+        return null;
+    }
+
+    /**
+     * 根据当前插件的默认Context, 为当前插件的组件创建一个单独的context
+     *
+     * @param pluginContext
+     * @param base  由系统创建的Context。 其实际类型应该是ContextImpl
+     * @return
+     */
+	/*package*/ static Context createNewPluginComponentContext(Context pluginContext, Context base, int theme) {
+        PluginContextTheme newContext = null;
+        if (pluginContext != null) {
+            newContext = (PluginContextTheme)PluginCreator.createPluginContext(((PluginContextTheme) pluginContext).getPluginDescriptor(),
+                    base, pluginContext.getResources(),
+                    (DexClassLoader) pluginContext.getClassLoader());
+
+            newContext.setPluginApplication((Application) ((PluginContextTheme) pluginContext).getApplicationContext());
+
+            newContext.setTheme(FairyGlobal.getApplication().getApplicationContext().getApplicationInfo().theme);
+        }
+        return newContext;
+    }
 }

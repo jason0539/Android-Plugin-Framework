@@ -39,11 +39,12 @@ public class PluginThemeHelper {
 				if (pluginRstyle != null) {
 					Field[] fields = pluginRstyle.getDeclaredFields();
 					if (fields != null) {
-						for (Field field :
-								fields) {
+						for (Field field : fields) {
 							field.setAccessible(true);
-							int themeResId = field.getInt(null);
-							themes.put(field.getName(), themeResId);
+                            if (field.getType().isPrimitive()) {
+                                int themeResId = field.getInt(null);
+                                themes.put(field.getName(), themeResId);
+                            }
 						}
 					}
 				}
@@ -76,7 +77,7 @@ public class PluginThemeHelper {
 
 					//注入插件上下文和主题
 					Context defaultContext = pluing.pluginContext;
-					Context pluginContext = PluginLoader.getNewPluginComponentContext(defaultContext,
+					Context pluginContext = PluginCreator.createNewPluginComponentContext(defaultContext,
 							((PluginBaseContextWrapper)activity.getBaseContext()).getBaseContext(), 0);
 					PluginInjector.resetActivityContext(pluginContext, activity, themeResId);
 

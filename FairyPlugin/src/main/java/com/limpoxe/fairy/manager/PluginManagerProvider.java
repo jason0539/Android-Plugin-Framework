@@ -9,7 +9,7 @@ import android.os.Build;
 import android.os.Bundle;
 
 import com.limpoxe.fairy.content.PluginDescriptor;
-import com.limpoxe.fairy.core.PluginLoader;
+import com.limpoxe.fairy.core.FairyGlobal;
 import com.limpoxe.fairy.util.LogUtil;
 
 import java.util.ArrayList;
@@ -79,7 +79,7 @@ public class PluginManagerProvider extends ContentProvider {
 
     public static Uri buildUri() {
         if (CONTENT_URI == null) {
-            CONTENT_URI = Uri.parse("content://"+ PluginLoader.getApplication().getPackageName() + ".manager" + "/call");
+            CONTENT_URI = Uri.parse("content://"+ FairyGlobal.getApplication().getPackageName() + ".manager" + "/call");
         }
         return CONTENT_URI;
     }
@@ -224,7 +224,7 @@ public class PluginManagerProvider extends ContentProvider {
             PluginStubBinding.unBindStubService(arg);
 
         } else if (ACTION_BIND_RECEIVER.equals(method)) {
-            bundle.putString(BIND_RECEIVER_RESULT, PluginStubBinding.bindStubReceiver());
+            bundle.putString(BIND_RECEIVER_RESULT, PluginStubBinding.bindStubReceiver(arg));
 
             return bundle;
 

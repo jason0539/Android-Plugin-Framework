@@ -4,7 +4,7 @@ import android.content.Context;
 import android.os.Build;
 import android.webkit.WebView;
 
-import com.limpoxe.fairy.core.PluginLoader;
+import com.limpoxe.fairy.core.FairyGlobal;
 import com.limpoxe.fairy.core.android.HackWebViewFactory;
 import com.limpoxe.fairy.core.proxy.MethodDelegate;
 import com.limpoxe.fairy.core.proxy.MethodProxy;
@@ -25,6 +25,9 @@ public class AndroidWebkitWebViewFactoryProvider extends MethodProxy {
     }
 
     public static void installProxy() {
+        if (!FairyGlobal.isLocalHtmlEnable()) {
+            return;
+        }
         //Debug.waitForDebugger();
         if (Build.VERSION.SDK_INT >= 19) {
             LogUtil.d("安装WebViewFactoryProviderProxy");
@@ -35,7 +38,7 @@ public class AndroidWebkitWebViewFactoryProvider extends MethodProxy {
                 Object webViewFactoryProviderProxy = ProxyUtil.createProxy(webViewFactoryProvider, new AndroidWebkitWebViewFactoryProvider());
                 HackWebViewFactory.setProviderInstance(webViewFactoryProviderProxy);
 
-                WebView wb = new WebView(PluginLoader.getApplication());
+                WebView wb = new WebView(FairyGlobal.getApplication());
                 wb.loadUrl("");//触发webview渲染引擎初始化
 
             } else {
@@ -81,6 +84,9 @@ public class AndroidWebkitWebViewFactoryProvider extends MethodProxy {
      * @param pluginActivity
      */
     public static void switchWebViewContext(Context pluginActivity) {
+        if (!FairyGlobal.isLocalHtmlEnable()) {
+            return;
+        }
         LogUtil.d("尝试切换WebView Context, 不同的WebView内核, 实现方式可能不同, 本方法基于Chrome的WebView实现");
         try {
             /**
