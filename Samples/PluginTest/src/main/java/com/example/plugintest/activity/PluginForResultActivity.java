@@ -22,7 +22,7 @@ public class PluginForResultActivity extends BaseActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(android.R.layout.activity_list_item);
+        setContentView(R.layout.activity_result);
         etInput = (EditText) findViewById(R.id.et_input_result);
         btnSetResult = (Button) findViewById(R.id.btn_set_result);
 
