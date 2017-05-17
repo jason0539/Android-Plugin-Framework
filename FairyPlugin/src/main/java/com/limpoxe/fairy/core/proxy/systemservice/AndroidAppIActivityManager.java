@@ -6,7 +6,7 @@ import android.content.Intent;
 import android.os.IBinder;
 
 import com.limpoxe.fairy.content.PluginDescriptor;
-import com.limpoxe.fairy.core.PluginLoader;
+import com.limpoxe.fairy.core.FairyGlobal;
 import com.limpoxe.fairy.core.PluginShadowService;
 import com.limpoxe.fairy.core.android.HackActivityManagerNative;
 import com.limpoxe.fairy.core.android.HackActivityThread;
@@ -48,11 +48,18 @@ public class AndroidAppIActivityManager extends MethodProxy {
         Object androidAppActivityManagerProxy = HackActivityManagerNative.getDefault();
         Object androidAppIActivityManagerStubProxyProxy = ProxyUtil.createProxy(androidAppActivityManagerProxy, new AndroidAppIActivityManager());
         Object singleton = HackActivityManagerNative.getGDefault();
-        //如果是IActivityManager
-        if (singleton.getClass().isAssignableFrom(androidAppIActivityManagerStubProxyProxy.getClass())) {
-            HackActivityManagerNative.setGDefault(androidAppIActivityManagerStubProxyProxy);
-        } else {//否则是包装过的单例
-            new HackSingleton(singleton).setInstance(androidAppIActivityManagerStubProxyProxy);
+        if (singleton != null) {
+            //如果是IActivityManager
+            if (singleton.getClass().isAssignableFrom(androidAppIActivityManagerStubProxyProxy.getClass())) {
+                HackActivityManagerNative.setGDefault(androidAppIActivityManagerStubProxyProxy);
+            } else {//否则是包装过的单例
+                new HackSingleton(singleton).setInstance(androidAppIActivityManagerStubProxyProxy);
+            }
+        } else {
+            //TODO
+            LogUtil.e("Android O 没有gDefault这个成员了");
+            //RefInvoker.dumpAllInfo("android.app.ActivityManagerNative");
+            //RefInvoker.dumpAllInfo(androidAppActivityManagerProxy);
         }
         LogUtil.d("安装完成");
     }
@@ -71,7 +78,7 @@ public class AndroidAppIActivityManager extends MethodProxy {
                 List<ActivityManager.RunningAppProcessInfo> result = (List<ActivityManager.RunningAppProcessInfo>)invokeResult;
                 for (ActivityManager.RunningAppProcessInfo appProcess : result) {
                     if (appProcess.pid == android.os.Process.myPid()) {
-                        appProcess.processName = PluginLoader.getApplication().getPackageName();
+                        appProcess.processName = FairyGlobal.getApplication().getPackageName();
                         break;
                     }
                 }
@@ -92,7 +99,7 @@ public class AndroidAppIActivityManager extends MethodProxy {
         public Object beforeInvoke(Object target, Method method, Object[] args) {
             LogUtil.v("beforeInvoke", method.getName(), args[1]);
             int type = (int)args[0];
-            args[1] = PluginLoader.getApplication().getPackageName();
+            args[1] = FairyGlobal.getApplication().getPackageName();
             if (type != INTENT_SENDER_ACTIVITY_RESULT) {
                 for (int i = 0; i < args.length; i++) {
                     if (args[i] != null && args[i].getClass().isAssignableFrom(Intent[].class)) {

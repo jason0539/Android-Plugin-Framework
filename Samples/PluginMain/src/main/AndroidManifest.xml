@@ -56,11 +56,17 @@
     <uses-permission android:name="android.permission.GET_INTENT_SENDER_INTENT"/>
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
 
+    <uses-permission android:name="android.permission.READ_LOGS" />
+
     <application
         android:name=".MyApplication"
         android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/ShareTheme" >
+
+        <meta-data
+            android:name="com.baidu.lbsapi.API_KEY"
+            android:value="zcV8rayjavRIRLmepXmzGBVx" />
 
         <activity android:name=".MainActivity" >
             <intent-filter>
@@ -120,6 +126,21 @@
                     android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </service>
+
+        <receiver android:name="com.example.plugintest.receiver.BootCompletedReceiver"
+                  android:process=":plugin">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.ACTION_SHUTDOWN"/>
+                <action android:name="test.thirdparty.open"/>
+            </intent-filter>
+            <intent-filter>
+                <action
+                    android:name="${applicationId}.STUB_EXACT" />
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

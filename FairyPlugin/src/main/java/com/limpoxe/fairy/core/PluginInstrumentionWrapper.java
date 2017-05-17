@@ -123,7 +123,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 					if (pluginDescriptor != null) {
 						boolean isRunning = PluginLauncher.instance().isRunning(pluginDescriptor.getPackageName());
 						if (!isRunning) {
-							if (PluginLoader.getMinLoadingTime() > 0 && PluginLoader.getLoadingResId() != 0) {
+							if (FairyGlobal.getMinLoadingTime() > 0 && FairyGlobal.getLoadingResId() != 0) {
 								return waitForLoading(pluginDescriptor);
 							} else {
 								//这个else是为了处理内嵌在tabactivity中的情况, 需要提前start，否则内嵌tab会被拉出tab单独显示
@@ -155,7 +155,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 					//这个逻辑是为了支持外部app唤起配置了stub_exact的插件Activity
 					PluginDescriptor pluginDescriptor = PluginManagerHelper.getPluginDescriptorByClassName(className);
 
-					if (pluginDescriptor != null && PluginLoader.getMinLoadingTime() > 0 && PluginLoader.getLoadingResId() != 0) {
+					if (pluginDescriptor != null && FairyGlobal.getMinLoadingTime() > 0 && FairyGlobal.getLoadingResId() != 0) {
 						boolean isRunning = PluginLauncher.instance().isRunning(pluginDescriptor.getPackageName());
 						if (!isRunning) {
 							return waitForLoading(pluginDescriptor);
@@ -166,9 +166,16 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 
 					if (clazz != null) {
 						cl = clazz.getClassLoader();
+                        //添加一个标记符
+                        intent.addCategory(RELAUNCH_FLAG + className);
 					} else {
-						throw new ClassNotFoundException("className : " + className, new Throwable());
-					}
+						//精确匹配却找不着目标，有多种可能，其中一个可能是收到外部发来的组件Intent时，插件还没安装
+                        //因此这里强行返回容错的class
+                        className = HostClassLoader.TolerantActivity.class.getName();
+                        cl = HostClassLoader.TolerantActivity.class.getClassLoader();
+                        //添加一个标记符
+                        intent.addCategory(RELAUNCH_FLAG + className);
+                    }
 				} else {
 					//进入这个分支可能是因为activity重启了，比如横竖屏切换，由于上面的分支已经把Action还原到原始到Action了
 					//这里只能通过之前添加的标记符来查找className
@@ -184,7 +191,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 
 								PluginDescriptor pluginDescriptor = PluginManagerHelper.getPluginDescriptorByClassName(className);
 
-								if (pluginDescriptor != null && PluginLoader.getMinLoadingTime() > 0 && PluginLoader.getLoadingResId() != 0) {
+								if (pluginDescriptor != null && FairyGlobal.getMinLoadingTime() > 0 && FairyGlobal.getLoadingResId() != 0) {
 									boolean isRunning = PluginLauncher.instance().isRunning(pluginDescriptor.getPackageName());
 									if (!isRunning) {//理论上这里的isRunning应当是true
 										return waitForLoading(pluginDescriptor);
@@ -192,11 +199,18 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 								}
 
 								Class clazz = PluginLoader.loadPluginClassByName(pluginDescriptor, className);
-
-								cl = clazz.getClassLoader();
-								found = true;
-								break;
-							}
+                                if (clazz != null) {
+                                    cl = clazz.getClassLoader();
+                                    found = true;
+                                } else {
+                                    //这里也需要处理STUB_EXACT匹配但插件尚未安装的情况
+                                    if (className.equals(HostClassLoader.TolerantActivity.class.getName())) {
+                                        cl = HostClassLoader.TolerantActivity.class.getClassLoader();
+                                        found = true;
+                                    }
+                                }
+                                break;
+                            }
 						}
 					}
 					if (!found) {
@@ -274,7 +288,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 				}
 				if (HackContextImpl.instanceOf(base)) {
 					HackContextImpl impl = new HackContextImpl(base);
-					String packageName = PluginLoader.getApplication().getPackageName();
+					String packageName = FairyGlobal.getApplication().getPackageName();
 					String packageName1 = activity.getPackageName();
 					impl.setBasePackageName(packageName);
 					impl.setOpPackageName(packageName);

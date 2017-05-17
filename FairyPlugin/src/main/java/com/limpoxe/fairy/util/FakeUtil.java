@@ -1,5 +1,6 @@
 package com.limpoxe.fairy.util;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.ComponentName;
 import android.content.Context;
@@ -23,7 +24,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.UserHandle;
 
-import com.limpoxe.fairy.core.PluginLoader;
+import com.limpoxe.fairy.core.FairyGlobal;
 
 import java.lang.reflect.Field;
 import java.util.List;
@@ -38,11 +39,11 @@ public class FakeUtil {
      * @return
      */
     public static Context fakeContext(Context context) {
-        if (!context.getPackageName().equals(PluginLoader.getApplication().getPackageName())) {
+        if (!context.getPackageName().equals(FairyGlobal.getApplication().getPackageName())) {
             context = new ContextWrapper(context) {
                 @Override
                 public String getPackageName() {
-                    return PluginLoader.getApplication().getPackageName();
+                    return FairyGlobal.getApplication().getPackageName();
                 }
             };
         }
@@ -93,8 +94,8 @@ public class FakeUtil {
                     public PackageInfo getPackageInfo(String packageName, int flags) throws NameNotFoundException {
                         PackageInfo packageInfo = pm.getPackageInfo(packageName, flags);
                         if ((flags & PackageManager.GET_SIGNATURES) != 0 ) {
-                            //可在此处修改签名
-                            //packageInfo.signatures =
+                            //返回宿主签名
+                            packageInfo.signatures = pm.getPackageInfo(getPackageName(), flags).signatures;
                         }
                         return packageInfo;
                     }
@@ -103,8 +104,12 @@ public class FakeUtil {
                     public ApplicationInfo getApplicationInfo(String packageName, int flags) throws NameNotFoundException {
                         ApplicationInfo applicationInfo = pm.getApplicationInfo(packageName, flags);
                         if ((flags & PackageManager.GET_META_DATA) != 0 ) {
-                            //可在此处修改meta
-                            applicationInfo.metaData = getBaseContext().getApplicationInfo().metaData;
+                            Context context = getBaseContext();
+                            while (context instanceof ContextWrapper) {
+                                context = ((ContextWrapper) context).getBaseContext();
+                            }
+                            //返回宿主meta
+                            applicationInfo.metaData = context.getApplicationInfo().metaData;
                         }
                         return applicationInfo;
                     }
@@ -542,5 +547,17 @@ public class FakeUtil {
         }
         //到这里context的实际类型应当是ContextImpl类，可以返回宿主packageName
         return context.getPackageName();
+    }
+
+    public static Context fakeWindowContext(final Activity pluginActivity) {
+        return new ContextWrapper(FairyGlobal.getApplication()) {
+            @Override
+            public Object getSystemService(String name) {
+                if (WINDOW_SERVICE.equals(name)) {
+                    return pluginActivity.getSystemService(name);
+                }
+                return super.getSystemService(name);
+            }
+        };
     }
 }
