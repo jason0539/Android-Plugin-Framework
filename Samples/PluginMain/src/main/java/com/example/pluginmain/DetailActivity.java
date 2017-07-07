@@ -13,6 +13,7 @@ import android.widget.Space;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.alibaba.android.arouter.facade.annotation.Route;
 import com.example.pluginsharelib.SharePOJO;
 import com.limpoxe.fairy.content.PluginDescriptor;
 import com.limpoxe.fairy.manager.PluginManagerHelper;
@@ -20,8 +21,9 @@ import com.limpoxe.fairy.manager.PluginManagerHelper;
 import java.util.HashMap;
 import java.util.Iterator;
 
+@Route(path = DetailActivity.ROUTER_PATH)
 public class DetailActivity extends AppCompatActivity {
-
+	public static final String ROUTER_PATH = "/main/detail";
 	private ViewGroup mRoot;
 
 	@Override

@@ -21,6 +21,7 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.alibaba.android.arouter.launcher.ARouter;
 import com.example.pluginsharelib.SharePOJO;
 import com.limpoxe.fairy.content.PluginDescriptor;
 import com.limpoxe.fairy.manager.PluginCallback;
@@ -210,9 +211,9 @@ public class MainActivity extends AppCompatActivity {
         } else {
             Toast.makeText(MainActivity.this, "插件"  + pluginDescriptor.getPackageName() + "没有配置Launcher", Toast.LENGTH_SHORT).show();
             //没有找到Launcher，打开插件详情
-            Intent intent = new Intent(MainActivity.this, DetailActivity.class);
-            intent.putExtra("plugin_id", pluginDescriptor.getPackageName());
-            startActivity(intent);
+            ARouter.getInstance().build(DetailActivity.ROUTER_PATH)
+                    .withString("plugin_id", pluginDescriptor.getPackageName())
+                    .navigation();
         }
     }
 

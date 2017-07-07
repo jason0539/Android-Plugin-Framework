@@ -19,12 +19,18 @@ android {
 
     defaultConfig {
         applicationId "com.example.pluginmain"
-        minSdkVersion 9
+        minSdkVersion 12
         targetSdkVersion 23
         versionCode 1
         versionName "1.1.2"
         ndk {
             abiFilters "armeabi-v7a", "x86", "x86_64"
+        }
+        //路由配置
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments = [ moduleName : project.getName() ]
+            }
         }
     }
 
@@ -94,6 +100,10 @@ android {
 }
 
 dependencies {
+    // //路由配置
+    compile 'com.alibaba:arouter-api:1.2.1.1'
+    annotationProcessor 'com.alibaba:arouter-compiler:1.1.2.1'
+
 //    compile('com.limpoxe.fairy:FairyPlugin:0.0.53-snapshot@aar')//通过后缀@aar来中断依赖传递
     compile project(':FairyPlugin')
     //optional
