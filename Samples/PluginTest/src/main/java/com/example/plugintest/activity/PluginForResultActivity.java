@@ -7,6 +7,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import com.alibaba.android.arouter.facade.annotation.Route;
 import com.example.pluginsharelib.BaseActivity;
 import com.example.plugintest.R;
 
@@ -14,6 +15,7 @@ import com.example.plugintest.R;
  * Created by liuzhenhui on 2017/2/14.
  */
 
+@Route(path = "/test/result")
 public class PluginForResultActivity extends BaseActivity {
 
     EditText etInput;

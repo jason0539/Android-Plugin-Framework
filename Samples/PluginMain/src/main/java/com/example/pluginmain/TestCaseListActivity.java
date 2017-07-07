@@ -19,6 +19,7 @@ import android.view.ViewGroup;
 import android.widget.PopupWindow;
 import android.widget.Toast;
 
+import com.alibaba.android.arouter.launcher.ARouter;
 import com.example.pluginsharelib.SharePOJO;
 import com.example.pluginsharelib.ShareService;
 import com.example.plugintest.IMyAidlInterface;
@@ -155,8 +156,9 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
 
     private void testStartActivityForResult() {
         //也可以直接构造Intent，指定打开插件中的某个Activity
-        Intent intent = new Intent("com.example.plugintest.activity.PluginForResultActivity");
-        startActivityForResult(intent,110);
+        ARouter.getInstance().build("/test/result").navigation(this,110);
+//        Intent intent = new Intent("com.example.plugintest.activity.PluginForResultActivity");
+//        startActivityForResult(intent,110);
     }
 
     @Override
