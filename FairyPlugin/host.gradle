@@ -227,6 +227,8 @@ afterEvaluate {
                     createThemePatch(buildFavType.replace("Debug", "").toLowerCase(), "debug");
                 } else if (buildFavType.endsWith("Release")) {
                     createThemePatch(buildFavType.replace("Release", "").toLowerCase(), "release");
+                } else if (buildFavType.endsWith("Ftest")) {
+                    createThemePatch(buildFavType.replace("Ftest", "").toLowerCase(), "ftest");
                 }
             }
         }
