@@ -24,6 +24,7 @@ import android.widget.Toast;
 import com.alibaba.android.arouter.launcher.ARouter;
 import com.example.pluginsharelib.SharePOJO;
 import com.limpoxe.fairy.content.PluginDescriptor;
+import com.limpoxe.fairy.core.PluginCreator;
 import com.limpoxe.fairy.manager.PluginCallback;
 import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.FileUtil;
@@ -262,7 +263,17 @@ public class MainActivity extends AppCompatActivity {
         } else {
             other.setVisibility(View.GONE);
         }
-	}
+
+        ArrayList<PluginDescriptor> plugins = PluginManagerHelper.getPlugins();
+        for (PluginDescriptor plugin : plugins) {
+            ClassLoader pluginClassLoader = PluginCreator.createPluginClassLoader(
+                    plugin.getInstalledPath(),
+                    plugin.isStandalone(),
+                    plugin.getDependencies(),
+                    plugin.getMuliDexList());
+            ARouter.loadClassFromApk(plugin.getInstalledPath(), pluginClassLoader);
+        }
+    }
 
 	@Override
 	protected void onDestroy() {

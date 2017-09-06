@@ -20,5 +20,7 @@ buildscript {
 allprojects {
     repositories {
         jcenter()
+        //Finger仓库
+        maven { url "http://192.168.3.1:8081/nexus/content/repositories/android/" }
     }
 }

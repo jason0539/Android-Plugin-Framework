@@ -15,6 +15,12 @@ android {
         targetSdkVersion 22
         versionCode 1
         versionName "1.0.1"
+        //路由配置
+        javaCompileOptions {
+            annotationProcessorOptions {
+                arguments = [ moduleName : project.getName() ]
+            }
+        }
     }
 
     lintOptions {
@@ -88,6 +94,7 @@ dependencies {
     //compile 'com.jakewharton:butterknife:8.5.1'
     annotationProcessor 'com.jakewharton:butterknife-compiler:8.5.1'
 
+    annotationProcessor 'com.alibaba:arouter-compiler:1.1.2.1'
 }
 
 afterEvaluate {
