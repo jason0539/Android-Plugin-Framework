@@ -130,3 +130,21 @@ ext {
 
 //apply from: '/Users/cailiming/develop/Android-Plugin-Framework/FairyPlugin/host.gradle'
 apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/host.gradle"
+
+//使用Instant run时，host.gradle中处理插件进程的配置获取不到，这里写死如何处理进程
+afterEvaluate {
+    def debugTask = project.tasks.findByName("processDebugManifest")
+    if (debugTask) {
+        debugTask.doLast {
+            println "=============================开始任务：" + debugTask
+            File manifestFile = new File("${project.buildDir}/intermediates/manifests/instant-run/debug/AndroidManifest.xml")
+            if (manifestFile.exists()){
+                def originManifestContent = manifestFile.getText('UTF-8')
+                println "=============================源文件内容：" + originManifestContent
+                def modifyedManifestContent = originManifestContent.replaceAll("android:process=\":plugin\"", "")
+                println "=============================修改后文件内容：" + modifyedManifestContent
+                manifestFile.write(modifyedManifestContent, 'UTF-8')
+            }
+        }
+    }
+}
