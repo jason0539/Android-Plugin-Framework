@@ -55,6 +55,7 @@ public class PluginManifestParser {
                             namespaceAndroid = parser.getNamespace("android");
                             
                             packageName = parser.getAttributeValue(null, "package");
+                            String useHostPackageName = parser.getAttributeValue(null, "useHostPackageName");
                             String versionCode = parser.getAttributeValue(namespaceAndroid, "versionCode");
                             String versionName = parser.getAttributeValue(namespaceAndroid, "versionName");
                             String platformBuildVersionCode = parser.getAttributeValue(namespaceAndroid, "platformBuildVersionCode");
@@ -73,10 +74,12 @@ public class PluginManifestParser {
                             desciptor.setPlatformBuildVersionCode(platformBuildVersionCode);
                             desciptor.setPlatformBuildVersionName(platformBuildVersionName);
 
-                            desciptor.setStandalone(sharedUserId == null || !FairyGlobal.getApplication().getPackageName().equals(sharedUserId));
+                            desciptor.setStandalone(sharedUserId == null || !FairyGlobal.getHostApplication().getPackageName().equals(sharedUserId));
                             if (!desciptor.isStandalone() && !TextUtils.isEmpty(requiredHostVersionName)) {
                                 desciptor.setRequiredHostVersionName(requiredHostVersionName);
                             }
+
+                            desciptor.setUseHostPackageName("true".equals(useHostPackageName));
 
                             LogUtil.v(packageName, versionCode, versionName, sharedUserId);
                         } else if ("uses-sdk".equals(tag))  {
@@ -186,6 +189,7 @@ public class PluginManifestParser {
                             String immersive = parser.getAttributeValue(namespaceAndroid, "immersive");//int string
                             String uiOptions = parser.getAttributeValue(namespaceAndroid, "uiOptions");//int string
                             String configChanges = parser.getAttributeValue(namespaceAndroid, "configChanges");//int string
+                            String useHostPackageName = parser.getAttributeValue(null, "useHostPackageName");
 
                             HashMap<String, ArrayList<PluginIntentFilter>> map = desciptor.getActivitys();
                             if (map == null) {
@@ -219,6 +223,7 @@ public class PluginManifestParser {
                             if (configChanges != null) {
                                 pluginActivityInfo.setConfigChanges(Integer.parseInt(configChanges.replace("0x", ""), 16));
                             }
+                            pluginActivityInfo.setUseHostPackageName("true".equals(useHostPackageName));
 
                         } else if ("receiver".equals(tag)) {
 

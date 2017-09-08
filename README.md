@@ -4,7 +4,7 @@ README: [中文](https://github.com/limpoxe/Android-Plugin-Framework/blob/master
 
 Android-Plugin-Framework是一个Android插件化框架，用于通过动态加载的方式免安装运行插件apk
 
-#### 最新版本: 0.0.53-snapshot
+#### 最新版本: 0.0.58-snapshot
 
 #### 项目结构
 
@@ -52,7 +52,12 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
   第三方app要唤起插件中的静态组件必须由宿主程序进行桥接，即此组件需同时预埋到宿主和插件的Manifest中
 - 不支持android.app.NativeActivity
 - 不支持当一个插件依赖另一个插件时，被插件依赖的包含资源
-- 不支持插件中的webview弹出```原生Chrome组件```，例如通过html的<input type="date"/>标签设置时间选择器,（可将Chrome路径添加到插件Assets解决，但似乎存在ROM兼容问题）
+- 不支持插件中的webview弹出```原生Chrome组件```
+  例如通过html的<input type="date"/>标签设置时间选择器。
+  说明：是否能支持原生组件取决于系统中使用WebView的实现。
+       如果是使用的Android System Webview，则可以支持。因为它packageId是以0x3f开头；
+       如果是使用的Chrome Webview，则不支持。因为它packageId是以0x7f开头，会和插件冲突。
+       这是采用Public.xml进行资源分组的缺陷。
 - 可能不支持对插件或者宿主进行加壳加固处理，未尝试
     
 # HOW TO USE
@@ -72,7 +77,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 ```
     dependencies {
         //请务必使用@aar结尾，以中断依赖传递
-        compile('com.limpoxe.fairy:FairyPlugin:0.0.53-snapshot@aar')
+        compile('com.limpoxe.fairy:FairyPlugin:0.0.58-snapshot@aar')
         //可选，用于支持插件全局函数式服务，不使用全局函数式服务不需要添加此依赖
         //compile('com.limpoxe.support:android-servicemanager:1.0.5@aar')
     }
@@ -94,13 +99,20 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
     @Override
     protected void attachBaseContext(Context base) {
         super.attachBaseContext(base);
-        //框架日志开关
+        
+        //框架日志开关, 默认false
         FairyGlobal.setLogEnable(true);
+        
+        //首次加载插件会创建插件对象，比较耗时，通过弹出loading页来过渡。
         //这个方法是设置首次加载插件时, 定制loading页面的UI, 不传即默认没有loading页
         //在宿主中创建任意一个layout传进去即可
+        //注意：首次唤起插件组件时，如果是通过startActivityForResult唤起的，如果配置了loading页，
+        //则实际是先打开了loading页，再转到目标页面，此时会忽略ForResult的结果。这种情况下应该禁用loading页配置
         FairyGlobal.setLoadingResId(R.layout.loading);
-        //是否支持插件中使用本地html
+        
+        //是否支持插件中使用本地html, 默认false
         FairyGlobal.setLocalHtmlenable(true);
+        
         //初始化框架
         PluginLoader.initLoader(this);
     }
@@ -195,7 +207,9 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
    
         所以如果使用其他编译方法，请务必仔细阅读build.gradle，了解编译过程和依赖关系后可以自行调整编译脚本，否则可能会失败。
 
-   待插件编译完成后，插件的编译脚本会自动将插件demo的apk复制到PlugiMain/assets目录下（复制脚本参看插件工程的build.gradle）,然后重新
+	3、Demo中使用了arm平台的so，若在x86平台上测试Demo可能会有so异常，请自行适配so。
+	
+   待插件编译完成后，插件的编译脚本会自动将插件demo的apk复制到PlugiMain/assets目录下（复制脚本参看插件工程的build.gradle）,然后重新
    打包安装PluginMain。
    或者也可将插件apk复制到sdcard，然后在宿主程序中调用PluginLoader.installPlugin("插件apk绝对路径")进行安装。
 
@@ -357,7 +371,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 
 12. 如何混淆宿主和插件
 
-    若需要混淆宿主，请参考PluginMain工程下的混淆配置，以宿主防止混淆后框架异常。
+    若需要混淆宿主，请参考PluginMain工程下的混淆配置，以防止宿主混淆后框架异常。
     
     若需要混淆非独立插件，步骤如下：
              
@@ -371,17 +385,26 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
               }
          执行这4个步骤之后，编译出来的非独立插件即为混淆后的插件
          
-         若混淆后出现运行时异常，请检查上述第7条补充说明第3步产生的临时文件，是否存在不该存在的类或者少了需要的类。
-         文件位于build/tmp/jarUnzip/host,build/tmp/jarUnzip/plugin;
+         若混淆后出现运行时异常，请检查临时文件是否存在不该存在的类或者少了需要的类。
+         文件位于build/tmp/jarUnzip/host, 以及build/tmp/jarUnzip/plugin;
          host目录为宿主编译出来混淆后的jar包解压后目录，等同于对宿主反编译后得到class目录
          plugin为插件编译出来混淆后的jar包解压后目录。正常情况下host目录的内容应该为plugin目录内容的子集。
-         且host目录存在的每一个文件，必定在plugin相同路径下存在，否则很可能是依赖配置错误或者mapping文件配置错误，会导致diff是出现遗漏而引起class异常
+         且host目录存在的每一个文件，必定在plugin相同路径下存在，否则很可能是依赖配置错误或者mapping文件配置错误，会导致脚本在做diff时出现遗漏而引起class异常
          插件最终的混淆后jar包，即是通过这两个目录diff后从plugin中剔除了所有在host中存在的文件后压缩而成。
          
          插件混淆后的jar包和diff后的jar包，在插件outputs目录下都有备份。
              
          这里需要注意的是插件开启混淆以后，需要在插件的proguard里面增加对插件Fragment的keep，否则如果此fragment没有在插件自身
          使用，仅作为嵌入宿主使用，则progurad可能误以为这个类在插件中没有被使用过而被精简掉
+         
+         ---------------------------------------------------
+         以Demo为例，启用PluginTest插件的Debug版本的混淆，方法如下：
+            1、修改PluginMain工程的build.gradle中的buildTypes.debug.minifyEnabled为true
+            2、修改PluginTest工程的build.gradle中的buildTypes.debug.minifyEnabled为true
+            3、修改PluginTest工程的build.gradle中的provided files(project(':Samples:PluginMain')... 为compile files(project(':Samples:PluginMain')...
+            4、放开PluginTest工程的build.gradle中对ext.host_obfuscated_jar的配置的注释
+            5、检查PluginTest工程的proguard-rules.pro文件中的-applymapping配置路径是否准确
+            6、clean && assembleDebug
              
 13. 如何使外部应用或者系统可以直接通过插件组件的Intent打开插件
 
@@ -405,6 +428,19 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
         
        可以参考demo        
 
+14. 如何使插件返回宿主包名
+
+    默认情况下，插件getPackageName返回插件包名。虽然框架中会在一些系统api上将packageName修正为宿主的，
+    但是仍然可能有些特殊原因，比如在插件中接了一些三方sdk，sdk中有些api框架没有修正，导致出现packageName错误。
+    
+    这种情况下，如果通过上面提到的fakeContext无法解决，可以使用useHostPackageName="true"这个配置指定插件使用宿主包名。
+    将此配置加在插件manifest文件的<manifest/>节点中
+    Demo参考Admob。
+    
+15. 如何添加自定义的Stub
+   
+    框架内置的stub模版有限，特别是对Activity来说，配置组合起来会比较多，若插件stub模版不满足要求时，可以通过添加自定义的stub映射处理器来进行stub映射
+    使用 FairyGlobal.registStubMappingProcessor() 来添加自定义的stub映射处理器
 
 # 注意事项
 
@@ -448,4 +484,4 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 ## 联系作者：
   Q：15871365851，添加时请注明插件开发
 
-  Q群：116993004、207397154(已满)，重要：添加前请务必仔细阅读此ReadMe！请务必仔细阅读Demo！
+  Q群：116993004，重要：添加前请务必仔细阅读此ReadMe！请务必仔细阅读Demo！

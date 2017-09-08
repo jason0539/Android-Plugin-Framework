@@ -75,14 +75,17 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 	}
 
 	@Override
-	public boolean onException(Object obj, Throwable e) {
-		if (obj instanceof Activity) {
-			((Activity) obj).finish();
-		} else if (obj instanceof Service) {
-			((Service) obj).stopSelf();
-		}
-		LogUtil.printException("记录错误日志", e);
-		return super.onException(obj, e);
+	public boolean onException(Object obj, Throwable throwable) {
+		try {
+            if (obj instanceof Activity) {
+                ((Activity) obj).finish();
+            } else if (obj instanceof Service) {
+                ((Service) obj).stopSelf();
+            }
+        } catch (Exception e1) {
+            //
+        }
+		return super.onException(obj, throwable);
 	}
 
 	@Override
@@ -124,7 +127,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 						boolean isRunning = PluginLauncher.instance().isRunning(pluginDescriptor.getPackageName());
 						if (!isRunning) {
 							if (FairyGlobal.getMinLoadingTime() > 0 && FairyGlobal.getLoadingResId() != 0) {
-								return waitForLoading(pluginDescriptor);
+								return waitForLoading(pluginDescriptor, pluginClassName);
 							} else {
 								//这个else是为了处理内嵌在tabactivity中的情况, 需要提前start，否则内嵌tab会被拉出tab单独显示
 								PluginLauncher.instance().startPlugin(pluginDescriptor);
@@ -158,7 +161,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 					if (pluginDescriptor != null && FairyGlobal.getMinLoadingTime() > 0 && FairyGlobal.getLoadingResId() != 0) {
 						boolean isRunning = PluginLauncher.instance().isRunning(pluginDescriptor.getPackageName());
 						if (!isRunning) {
-							return waitForLoading(pluginDescriptor);
+							return waitForLoading(pluginDescriptor, className);
 						}
 					}
 
@@ -179,6 +182,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 				} else {
 					//进入这个分支可能是因为activity重启了，比如横竖屏切换，由于上面的分支已经把Action还原到原始到Action了
 					//这里只能通过之前添加的标记符来查找className
+                    LogUtil.e("check with RELAUNCH_FLAG");
 					boolean found = false;
 					Set<String> category = intent.getCategories();
 					if (category != null) {
@@ -194,7 +198,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 								if (pluginDescriptor != null && FairyGlobal.getMinLoadingTime() > 0 && FairyGlobal.getLoadingResId() != 0) {
 									boolean isRunning = PluginLauncher.instance().isRunning(pluginDescriptor.getPackageName());
 									if (!isRunning) {//理论上这里的isRunning应当是true
-										return waitForLoading(pluginDescriptor);
+										return waitForLoading(pluginDescriptor, className);
 									}
 								}
 
@@ -247,9 +251,9 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 		}
 	}
 
-	private Activity waitForLoading(PluginDescriptor pluginDescriptor) {
+	private Activity waitForLoading(PluginDescriptor pluginDescriptor, String targetClassName) {
 		WaitForLoadingPluginActivity waitForLoadingPluginActivity = new WaitForLoadingPluginActivity();
-		waitForLoadingPluginActivity.setTargetPlugin(pluginDescriptor);
+		waitForLoadingPluginActivity.setTargetPlugin(pluginDescriptor, targetClassName);
 		return waitForLoadingPluginActivity;
 	}
 
@@ -288,7 +292,7 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 				}
 				if (HackContextImpl.instanceOf(base)) {
 					HackContextImpl impl = new HackContextImpl(base);
-					String packageName = FairyGlobal.getApplication().getPackageName();
+					String packageName = FairyGlobal.getHostApplication().getPackageName();
 					String packageName1 = activity.getPackageName();
 					impl.setBasePackageName(packageName);
 					impl.setOpPackageName(packageName);
@@ -490,4 +494,15 @@ public class PluginInstrumentionWrapper extends Instrumentation {
 
 		hackInstrumentation.execStartActivityFromAppTask(who, contextThread, appTask, intent, options);
 	}
+
+	//7.1?
+    public ActivityResult execStartActivityAsCaller(Context who, IBinder contextThread, IBinder token, Activity target,
+            Intent intent, int requestCode, Bundle options, boolean ignoreTargetSecurity,
+            int userId) {
+
+        PluginIntentResolver.resolveActivity(intent);
+
+        return hackInstrumentation.execStartActivityAsCaller(who, contextThread, token, target, intent, requestCode, options, ignoreTargetSecurity, userId);
+    }
+
 }

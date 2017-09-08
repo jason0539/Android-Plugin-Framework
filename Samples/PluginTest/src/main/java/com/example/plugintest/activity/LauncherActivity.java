@@ -1,10 +1,17 @@
 package com.example.plugintest.activity;
 
+import android.app.Activity;
 import android.app.Notification;
 import android.app.NotificationManager;
+import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.sqlite.SQLiteDatabase;
@@ -12,6 +19,8 @@ import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.os.RemoteException;
 import android.support.v4.app.NotificationCompat;
 import android.support.v7.app.ActionBar;
 import android.telephony.CellInfo;
@@ -24,14 +33,21 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.PopupWindow;
+import android.widget.Toast;
 
 import com.example.pluginsharelib.BaseActivity;
+import com.example.pluginsharelib.IHostAidlInterface;
 import com.example.pluginsharelib.SharePOJO;
 import com.example.plugintest.Log;
 import com.example.plugintest.R;
 import com.example.plugintest.receiver.PluginTestReceiver2;
 import com.example.plugintest.service.PluginTestService;
+import com.example.plugintest.vo.ParamVO;
+import com.limpoxe.fairy.core.FairyGlobal;
+import com.limpoxe.fairy.core.android.HackActivity;
+import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.LogUtil;
+import com.umeng.analytics.MobclickAgent;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -49,6 +65,32 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
     @BindView(R.id.onClickHellowrld)
     Button butterTest;
 
+    //Test UmengSdk
+    Activity fakeThisForUmengSdk;
+
+    private IHostAidlInterface mService;
+    private ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder service) {
+            mService = IHostAidlInterface.Stub.asInterface(service);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            mService = null;
+        }
+    };
+
+    BroadcastReceiver broadcastReceiver =  new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            intent.setExtrasClassLoader(ParamVO.class.getClassLoader());
+            String msg = intent.getStringExtra("msg");
+            ParamVO paramVO = (ParamVO)intent.getSerializableExtra("vo");
+            Toast.makeText(context, msg + ", " + paramVO, Toast.LENGTH_SHORT).show();
+        }
+    };
+
     @Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -60,32 +102,11 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 		setContentView(R.layout.plugin_launcher);
         ButterKnifeCompat.bind(this);
 
-		Log.e("xxx1", "activity_welcome ID= " + R.layout.plugin_launcher);
-		Log.e("xxx2", getResources().getResourceEntryName(R.layout.plugin_launcher));
-		Log.e("xxx3", getResources().getString(R.string.app_name) + "  " + getPackageManager().getApplicationLabel(getApplicationInfo()));
-		Log.e("xxx4", getPackageName() + ", " + getText(R.string.app_name));
-		Log.e("xxx5", getResources().getString(android.R.string.httpErrorBadUrl));
-		Log.e("xxx6", getResources().getString(getResources().getIdentifier("app_name", "string", "com.example.plugintest")));
-		Log.e("xxx7", getResources().getString(getResources().getIdentifier("app_name", "string", getPackageName())));
-		Log.e("xxx8", getResources().getString(getResources().getIdentifier("app_name", "string", "com.example.pluginmain")));
-        Log.e("xxx9", butterTest.getText());
+		testLog();
 
-        if (Build.VERSION.SDK_INT >= 17) {
-            boolean isGranted = true;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                if (checkSelfPermission("android.permission.ACCESS_COARSE_LOCATION") == PackageManager.PERMISSION_DENIED) {
-                    isGranted = false;
-                    requestPermissions(new String[]{"android.permission.ACCESS_COARSE_LOCATION"}, 10086);
-                }
-            }
-            if (isGranted) {
-                TelephonyManager telephonyManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
-                List<CellInfo> list =  telephonyManager.getAllCellInfo();
-                if (list != null) {
-                    LogUtil.v(list);
-                }
-            }
-        }
+        fakeThisForUmengSdk = fakeActivityForUMengSdk(LauncherActivity.this);
+
+        requestPermission();
 
 		ActionBar actionBar = getSupportActionBar();
 		actionBar.setTitle("这是插件首屏");
@@ -115,6 +136,77 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 		findViewById( R.id.onClickPluginTestService2).setOnClickListener(this);
 
         testQueryIntentActivities();
+        testAlarm();
+        testService();
+        testMeta();
+        testVersion1();
+        testVersion2();
+    }
+
+    private void testVersion1() {
+        try {
+            PackageManager pm = getPackageManager();
+            PackageInfo pi = pm.getPackageInfo(getPackageName(), 0);
+            LogUtil.v("plugin", pi.versionName, pi.versionCode);
+        } catch (Exception e) {
+            Log.e("VersionInfo", "Exception", e);
+        }
+    }
+
+    private void testVersion2() {
+        try {
+            PackageManager pm = getPackageManager();
+            PackageInfo pi = pm.getPackageInfo(FairyGlobal.getApplication().getPackageName(), 0);
+            LogUtil.v("host", pi.versionName, pi.versionCode);
+        } catch (Exception e) {
+            Log.e("VersionInfo", "Exception", e);
+        }
+    }
+
+    private void testMeta() {
+        try {
+            ApplicationInfo application = (ApplicationInfo)getPackageManager().getApplicationInfo(getPackageName(), PackageManager.GET_META_DATA);
+            int hellowMeta = (int)application.metaData.get("abcdef");
+            Toast.makeText(this, hellowMeta + "", Toast.LENGTH_SHORT).show();
+
+            int metaData = (int)getApplicationInfo().metaData.get("abcdef");
+
+            LogUtil.d("abcdef", metaData);
+        } catch (PackageManager.NameNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void testAlarm() {
+        registerReceiver(broadcastReceiver, new IntentFilter("ACTION_ALARM_TEST"));
+
+//        Intent intent = new Intent("ACTION_ALARM_TEST");
+//        intent.putExtra("msg", "测试Alarm");
+//        intent.putExtra("vo", new ParamVO());
+//        intent.setExtrasClassLoader(ParamVO.class.getClassLoader());
+//        PendingIntent pendingIntent = PendingIntent.getBroadcast(this, 0, intent, 0);
+//        AlarmManager am = (AlarmManager)getSystemService(ALARM_SERVICE);
+//        am.set(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 5*1000, pendingIntent);
+    }
+
+    private void testService() {
+        Intent intent = new Intent();
+        intent.setAction("com.example.HostService");
+        //从 Android 5.0开始 隐式Intent绑定服务的方式已不能使用,所以这里需要设置Service所在服务端的包名
+        intent.setPackage("com.example.pluginmain");
+        bindService(intent, connection, Context.BIND_AUTO_CREATE);
+    }
+
+    private void testLog() {
+        Log.e("xxx1", "activity_welcome ID= " + R.layout.plugin_launcher);
+        Log.e("xxx2", getResources().getResourceEntryName(R.layout.plugin_launcher));
+        Log.e("xxx3", getResources().getString(R.string.app_name) + "  " + getPackageManager().getApplicationLabel(getApplicationInfo()));
+        Log.e("xxx4", getPackageName() + ", " + getText(R.string.app_name));
+        Log.e("xxx5", getResources().getString(android.R.string.httpErrorBadUrl));
+        Log.e("xxx6", getResources().getString(getResources().getIdentifier("app_name", "string", "com.example.plugintest")));
+        Log.e("xxx7", getResources().getString(getResources().getIdentifier("app_name", "string", getPackageName())));
+        Log.e("xxx8", getResources().getString(getResources().getIdentifier("app_name", "string", "com.example.pluginmain")));
+        Log.e("xxx9", butterTest.getText());
     }
 
     private void testNotification() {
@@ -138,6 +230,25 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
         List<ResolveInfo> infos = manager.queryIntentActivities(intent, 0);
 
         Log.e("xx", "infos=" + (infos==null?"0":infos.size()));
+    }
+
+    private void requestPermission() {
+        if (Build.VERSION.SDK_INT >= 17) {
+            boolean isGranted = true;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                if (checkSelfPermission("android.permission.ACCESS_COARSE_LOCATION") == PackageManager.PERMISSION_DENIED) {
+                    isGranted = false;
+                    requestPermissions(new String[]{"android.permission.ACCESS_COARSE_LOCATION"}, 10086);
+                }
+            }
+            if (isGranted) {
+                TelephonyManager telephonyManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
+                List<CellInfo> list =  telephonyManager.getAllCellInfo();
+                if (list != null) {
+                    LogUtil.v(list);
+                }
+            }
+        }
     }
 
 	private static void startFragmentInHostActivity(Context context, String targetId) {
@@ -209,21 +320,45 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickHellowrld(View v) {
-		Intent intent = getPackageManager().getLaunchIntentForPackage("com.example.pluginhelloworld");
-		intent.putExtra("testParam", "testParam");
-		startActivity(intent);
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_4");
+
+        if (PluginManagerHelper.isInstalled("com.example.pluginhelloworld")) {
+            Intent intent = getPackageManager().getLaunchIntentForPackage("com.example.pluginhelloworld");
+            if (intent != null) {
+                intent.putExtra("testParam", "testParam");
+                startActivity(intent);
+            } else {
+                Log.e("onClickHellowrld", "No Launcher Intent");
+            }
+        } else {
+            Log.e("onClickHellowrld", "Not Installed");
+        }
+
+        if (mService != null) {
+            try {
+                mService.basicTypes(1,2,true,4f,5d,"hostAIDL");
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
+        }
 	}
 
 	public void onClickPluginNormalFragment(View v) {
-		startFragmentInHostActivity(this, "some_id_for_fragment1");
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_5");
+
+        startFragmentInHostActivity(this, "some_id_for_fragment1");
 	}
 
 	public void onClickPluginSpecFragment(View v) {
-		startFragmentInHostActivity(this, "some_id_for_fragment2");
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_6");
+
+        startFragmentInHostActivity(this, "some_id_for_fragment2");
 	}
 
 	public void onClickPluginForDialogActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_7");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginForDialogActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -232,7 +367,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginForOppoAndVivoActivity(View v) {
-		//利用Action打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_8");
+
+        //利用Action打开
 		Intent intent = new Intent("test.ijk");
 		intent.putExtra("testParam", "testParam");
 		intent.putExtra("paramVO", new SharePOJO("测试VO"));
@@ -252,7 +389,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginFragmentTestActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_9");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginFragmentTestActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -261,7 +400,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginSingleTaskActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_10");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginSingleTaskActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -272,7 +413,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginTestActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_11");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginTestActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -282,7 +425,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginTestOpenPluginActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_12");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginTestOpenPluginActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -291,7 +436,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginTestTabActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_13");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginTestTabActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -300,7 +447,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginWebViewActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_14");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginWebViewActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -309,7 +458,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickTransparentActivity(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_15");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, TransparentActivity.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -318,21 +469,31 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickDesignActivity(View v) {
-		Intent intent = new Intent(this, DesignActivity.class);
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_16");
+
+        Intent intent = new Intent(this, DesignActivity.class);
 		startActivity(intent);
 
         testNotification();
+
+//        Intent resultIntnet = new Intent();
+//        resultIntnet.setClassName("com.example.pluginmain", "com.example.pluginmain.TestCaseListActivity");
+//        startActivityForResult(resultIntnet, 10086);
 	}
 
 	public void onClickPluginTestReceiver(View v) {
-		//利用Action打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_17");
+
+        //利用Action打开
 		Intent intent = new Intent("test.rst2");//两个Receive都配置了这个aciton，这里可以同时唤起两个Receiver
 		intent.putExtra("testParam", "testParam");
 		sendBroadcast(intent);
 	}
 
 	public void onClickPluginTestReceiver2(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_18");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginTestReceiver2.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -340,7 +501,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginTestService(View v) {
-		//利用className打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_19");
+
+        //利用className打开
 		Intent intent = new Intent();
 		intent.setClassName(this, PluginTestService.class.getName());
 		intent.putExtra("testParam", "testParam");
@@ -349,7 +512,9 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	}
 
 	public void onClickPluginTestService2(View v) {
-		//利用Action打开
+        MobclickAgent.onEvent(fakeThisForUmengSdk, "test_20");
+
+        //利用Action打开
 		Intent intent = new Intent("test.lmn2");
 		intent.putExtra("testParam", "testParam");
 		startService(intent);
@@ -365,9 +530,15 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 	@Override
 	protected void onResume() {
 		super.onResume();
+        MobclickAgent.onResume(fakeThisForUmengSdk);
 
 		testDataApi();
 	}
+
+    public void onPause() {
+        super.onPause();
+        MobclickAgent.onPause(fakeThisForUmengSdk);
+    }
 
 	public static void show(View rootView) {
 
@@ -445,4 +616,47 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 		return super.onKeyUp(keyCode, event);
 	}
 
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+//        LogUtil.d("onActivityResult", requestCode, resultCode);
+//        if (data != null) {
+//            LogUtil.d("onActivityResult data", data.getStringExtra("ret"));
+//        }
+    }
+
+    public static Activity fakeActivityForUMengSdk(Activity activity) {
+        //getApplication();
+        //getApplicationContext();
+        //getPackageName();
+        //getLocalClassName();
+        final String className = activity.getClass().getSimpleName();
+        Activity fakeActivity = new Activity() {
+            @Override
+            public Context getApplicationContext() {
+                return FairyGlobal.getApplication().getApplicationContext();
+            }
+
+            @Override
+            public String getPackageName() {
+                return FairyGlobal.getApplication().getPackageName();
+            }
+
+            public String getLocalClassName() {
+                return className;
+            }
+        };
+        new HackActivity(fakeActivity).setApplication(FairyGlobal.getApplication());
+        return fakeActivity;
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (connection != null) {
+            unbindService(connection);
+        }
+        unregisterReceiver(broadcastReceiver);
+    }
 }

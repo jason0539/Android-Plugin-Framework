@@ -8,7 +8,6 @@ import android.content.res.Resources;
 import com.limpoxe.fairy.content.LoadedPlugin;
 import com.limpoxe.fairy.content.PluginDescriptor;
 import com.limpoxe.fairy.core.android.HackAssetManager;
-import com.limpoxe.fairy.core.compat.CompatForWebViewFactoryApi21;
 import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.LogUtil;
 
@@ -122,10 +121,6 @@ public class PluginCreator {
 		assetPaths[0] = plugin;
 		LogUtil.v("create Plugin Resource from: ", plugin);
 
-        //TODO 需要将chrome添加到assetPath，以解决在webviw中弹出对话框的（如日历）是找不着资源的问题，但是部分系统不兼容
-        //@see CompatForWebViewFactoryApi21.addWebViewAssets()
-        String chromePath = CompatForWebViewFactoryApi21.getChromeApkPath();
-
         if (!isStandalone) {
 			if (dependencies != null) {
 				//插件间资源依赖，这里需要遍历添加dependencies
@@ -161,7 +156,7 @@ public class PluginCreator {
 		dependencies = null;
 
 		ArrayList<String> paths = new ArrayList<String>();
-		AssetManager hostAssetsManager = PluginLoader.getApplication().getAssets();
+		AssetManager hostAssetsManager = PluginLoader.getHostApplication().getAssets();
 		Integer pathCount = (Integer)RefInvoker.invokeMethod(hostAssetsManager,
 				AssetManager.class, "getStringBlockCount", null, null);
 		if (pathCount != null) {
@@ -221,7 +216,7 @@ public class PluginCreator {
         if (plugin != null) {
             PluginContextTheme newContext = (PluginContextTheme)PluginCreator.createPluginContext(
                     ((PluginContextTheme) plugin.pluginContext).getPluginDescriptor(),
-                    FairyGlobal.getApplication().getBaseContext(), plugin.pluginResource, plugin.pluginClassLoader);
+                    FairyGlobal.getHostApplication().getBaseContext(), plugin.pluginResource, plugin.pluginClassLoader);
 
             newContext.setPluginApplication(plugin.pluginApplication);
 
@@ -249,7 +244,7 @@ public class PluginCreator {
 
             newContext.setPluginApplication((Application) ((PluginContextTheme) pluginContext).getApplicationContext());
 
-            newContext.setTheme(FairyGlobal.getApplication().getApplicationContext().getApplicationInfo().theme);
+            newContext.setTheme(FairyGlobal.getHostApplication().getApplicationContext().getApplicationInfo().theme);
         }
         return newContext;
     }

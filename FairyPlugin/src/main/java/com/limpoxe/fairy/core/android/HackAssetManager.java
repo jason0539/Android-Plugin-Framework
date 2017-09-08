@@ -10,11 +10,12 @@ import com.limpoxe.fairy.util.RefInvoker;
 
 public class HackAssetManager {
 
+    //maybe android.content.res.MiuiAssetManager / android.content.res.BaiduAssetManager
     private static final String ClassName = "android.content.res.AssetManager";
 
     private static final String Method_addAssetPath = "addAssetPath";
     private static final String Method_addAssetPaths = "addAssetPaths";
-
+    private static final String Method_ensureStringBlocks = "ensureStringBlocks";
     private static final String Method_getAssignedPackageIdentifiers = "getAssignedPackageIdentifiers";
 
     private Object instance;
@@ -33,9 +34,15 @@ public class HackAssetManager {
 
     }
 
+    //Android L
     public SparseArray<String> getAssignedPackageIdentifiers() {
         SparseArray<String> packageIdentifiers = (SparseArray<String>) RefInvoker.invokeMethod(instance,
                 ClassName, Method_getAssignedPackageIdentifiers, null, null);
         return packageIdentifiers;
+    }
+
+    public Object[] ensureStringBlocks() {
+        return (Object[])RefInvoker.invokeMethod(instance,
+                ClassName, Method_ensureStringBlocks, null, null);
     }
 }

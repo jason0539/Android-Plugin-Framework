@@ -141,8 +141,8 @@ public class PluginInjector {
 
 				pluginDescriptor = PluginManagerHelper.getPluginDescriptorByClassName(activity.getClass().getName());
 				if(pluginDescriptor == null) {
-					throw new PluginNotFoundError("plugin with class " + activity.getClass().getName() + " not found");
-				}
+                    throw new PluginNotFoundError("未找到插件：" + activity.getClass().getName() + ", 插件未安装或已损坏");
+                }
 
 				LoadedPlugin plugin = PluginLauncher.instance().getRunningPlugin(pluginDescriptor.getPackageName());
 				if (plugin == null || plugin.pluginApplication == null) {
@@ -166,7 +166,7 @@ public class PluginInjector {
 					// 因此直接将这个Activity的Context也替换成插件的Context
 					pluginDescriptor = PluginManagerHelper.getPluginDescriptorByPluginId(pluginId);
 					if(pluginDescriptor == null) {
-						throw new PluginNotFoundError("plugin with class " + activity.getClass().getName() + " not found");
+						throw new PluginNotFoundError("未找到插件：" + pluginId + ", 插件未安装或已损坏");
 					}
 
 					//插件可能尚未初始化，确保使用前已经初始化
@@ -188,6 +188,12 @@ public class PluginInjector {
 			int pluginAppTheme = getPluginTheme(activityInfo, pluginActivityInfo, pluginDescriptor);
 
 			LogUtil.e("Theme", "0x" + Integer.toHexString(pluginAppTheme), activity.getClass().getName());
+
+            //pluginActivityInfo != null的判断是为了避免在Fragment插件嵌入其他Activity时没有pluginActivityInfo造成NPE
+            if (pluginActivityInfo != null && pluginActivityInfo.isUseHostPackageName()) {
+                LogUtil.e("useHostPackageName true");
+                ((PluginContextTheme)pluginContext).setUseHostPackageName(true);
+            }
 
 			resetActivityContext(pluginContext, activity, pluginAppTheme);
 
@@ -259,7 +265,7 @@ public class PluginInjector {
 		if (pluginActivityInfo != null) {
 
 			//如果PluginContextTheme的getPackageName返回了插件包名,需要在这里对attribute修正
-			activity.getWindow().getAttributes().packageName = FairyGlobal.getApplication().getPackageName();
+			activity.getWindow().getAttributes().packageName = FairyGlobal.getHostApplication().getPackageName();
 
 			if (null != pluginActivityInfo.getWindowSoftInputMode()) {
 				activity.getWindow().setSoftInputMode(Integer.parseInt(pluginActivityInfo.getWindowSoftInputMode().replace("0x", ""), 16));
@@ -287,11 +293,12 @@ public class PluginInjector {
 				}
 			}
 
-			LogUtil.v(activity.getClass().getName(), "immersive", pluginActivityInfo.getImmersive());
-			LogUtil.v(activity.getClass().getName(), "screenOrientation", pluginActivityInfo.getScreenOrientation());
-			LogUtil.v(activity.getClass().getName(), "launchMode", pluginActivityInfo.getLaunchMode());
-			LogUtil.v(activity.getClass().getName(), "windowSoftInputMode", pluginActivityInfo.getWindowSoftInputMode());
-			LogUtil.v(activity.getClass().getName(), "uiOptions", pluginActivityInfo.getUiOptions());
+			String activityClassName = activity.getClass().getName();
+			LogUtil.v(activityClassName, "immersive", pluginActivityInfo.getImmersive());
+			LogUtil.v(activityClassName, "screenOrientation", pluginActivityInfo.getScreenOrientation());
+			LogUtil.v(activityClassName, "launchMode", pluginActivityInfo.getLaunchMode());
+			LogUtil.v(activityClassName, "windowSoftInputMode", pluginActivityInfo.getWindowSoftInputMode());
+			LogUtil.v(activityClassName, "uiOptions", pluginActivityInfo.getUiOptions());
 		}
 
 		//如果是独立插件，由于没有合并资源，这里还需要替换掉 mActivityInfo，
@@ -371,7 +378,7 @@ public class PluginInjector {
 	private static int getPluginTheme(ActivityInfo activityInfo, PluginActivityInfo pluginActivityInfo, PluginDescriptor pd) {
 		int pluginAppTheme = 0;
 		if (pluginActivityInfo != null ) {
-			pluginAppTheme = ResourceUtil.getResourceId(pluginActivityInfo.getTheme());
+			pluginAppTheme = ResourceUtil.parseResId(pluginActivityInfo.getTheme());
 		}
 		if (pluginAppTheme == 0) {
 			pluginAppTheme = pd.getApplicationTheme();
@@ -394,7 +401,7 @@ public class PluginInjector {
 	public static void hackHostClassLoaderIfNeeded() {
         LogUtil.v("hackHostClassLoaderIfNeeded");
 
-        HackApplication hackApplication = new HackApplication(FairyGlobal.getApplication());
+        HackApplication hackApplication = new HackApplication(FairyGlobal.getHostApplication());
 		Object mLoadedApk = hackApplication.getLoadedApk();
 		if (mLoadedApk == null) {
 			//重试一次
@@ -409,9 +416,9 @@ public class PluginInjector {
 			ClassLoader originalLoader = hackLoadedApk.getClassLoader();
 			if (!(originalLoader instanceof HostClassLoader)) {
 				HostClassLoader newLoader = new HostClassLoader("",
-						FairyGlobal.getApplication()
+						FairyGlobal.getHostApplication()
 						.getCacheDir().getAbsolutePath(),
-						FairyGlobal.getApplication().getCacheDir().getAbsolutePath(),
+						FairyGlobal.getHostApplication().getCacheDir().getAbsolutePath(),
 						originalLoader);
 				hackLoadedApk.setClassLoader(newLoader);
 			}

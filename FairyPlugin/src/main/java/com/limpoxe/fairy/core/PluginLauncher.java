@@ -23,6 +23,8 @@ import com.limpoxe.fairy.content.PluginDescriptor;
 import com.limpoxe.fairy.core.android.HackActivityThread;
 import com.limpoxe.fairy.core.android.HackApplication;
 import com.limpoxe.fairy.core.android.HackSupportV4LocalboarcastManager;
+import com.limpoxe.fairy.core.compat.CompatForFragmentClassCache;
+import com.limpoxe.fairy.core.compat.CompatForWebViewFactoryApi21;
 import com.limpoxe.fairy.core.exception.PluginNotFoundError;
 import com.limpoxe.fairy.core.exception.PluginResInitError;
 import com.limpoxe.fairy.core.localservice.LocalServiceManager;
@@ -94,8 +96,8 @@ public class PluginLauncher implements Serializable {
 			LogUtil.v("插件信息", pluginDescriptor.getVersion(), pluginDescriptor.getInstalledPath());
 
 			Resources pluginRes = PluginCreator.createPluginResource(
-					FairyGlobal.getApplication().getApplicationInfo().sourceDir,
-					FairyGlobal.getApplication().getResources(), pluginDescriptor);
+					FairyGlobal.getHostApplication().getApplicationInfo().sourceDir,
+					FairyGlobal.getHostApplication().getResources(), pluginDescriptor);
 
 			if (pluginRes == null) {
 				LogUtil.e("初始化插件失败 : res");
@@ -116,7 +118,7 @@ public class PluginLauncher implements Serializable {
 
 			PluginContextTheme pluginContext = (PluginContextTheme)PluginCreator.createPluginContext(
 					pluginDescriptor,
-					FairyGlobal.getApplication().getBaseContext(),
+					FairyGlobal.getHostApplication().getBaseContext(),
 					pluginRes,
 					pluginClassLoader);
 
@@ -174,16 +176,14 @@ public class PluginLauncher implements Serializable {
 		LogUtil.i("初始化插件 " + pluginDescriptor.getPackageName() + " " + pluginDescriptor.getApplicationName() + ", 耗时:" + (t3 - t13));
 
 		try {
-			HackActivityThread.installPackageInfo(FairyGlobal.getApplication(), pluginDescriptor.getPackageName(), pluginDescriptor,
+			HackActivityThread.installPackageInfo(FairyGlobal.getHostApplication(), pluginDescriptor.getPackageName(), pluginDescriptor,
 					pluginClassLoader, pluginRes, pluginApplication);
 		} catch (ClassNotFoundException e) {
 			e.printStackTrace();
 		}
 
-        // 下面这行代码可以解决插件中webview加载html时<input type=date />控件出错的问题，
-        // 但是在部分系统上又会造成插件assets资源混乱而导致crash
-        // 先注释掉
-        // CompatForWebViewFactoryApi21.addWebViewAssets(plugin.pluginApplication.getAssets());
+        // 解决插件中webview加载html时<input type=date />控件出错的问题，兼容性待验证
+        CompatForWebViewFactoryApi21.addWebViewAssets(pluginRes.getAssets());
 
 		LogUtil.w("初始化插件" + pluginDescriptor.getPackageName() + "完成");
 	}
@@ -209,7 +209,7 @@ public class PluginLauncher implements Serializable {
 		}
 
 		//安装ContentProvider, 在插件Application对象构造以后，oncreate调用之前
-		PluginInjector.installContentProviders(FairyGlobal.getApplication(), pluginApplication, pluginDescriptor.getProviderInfos().values());
+		PluginInjector.installContentProviders(FairyGlobal.getHostApplication(), pluginApplication, pluginDescriptor.getProviderInfos().values());
 
 		//执行onCreate
 
@@ -218,23 +218,48 @@ public class PluginLauncher implements Serializable {
         LogUtil.v("屏蔽插件中的UncaughtExceptionHandler");
         //先拿到宿主的crashHandler
         Thread.UncaughtExceptionHandler old = Thread.getDefaultUncaughtExceptionHandler();
+        Thread.setDefaultUncaughtExceptionHandler(null);
 
         pluginApplication.onCreate();
+
+        Thread.UncaughtExceptionHandler pluginExHandler = Thread.getDefaultUncaughtExceptionHandler();
 
         // 再还原宿主的crashHandler，这里之所以需要还原CrashHandler，
         // 是因为如果插件中自己设置了自己的crashHandler（通常是在oncreate中），
         // 会导致当前进程的主线程的handler被意外修改。
         // 如果有多个插件都有设置自己的crashHandler，也会导致混乱
-        // 所以这里直接屏蔽掉插件的crashHandler
-        //TODO 或许也可以做成消息链进行分发？
-        Thread.setDefaultUncaughtExceptionHandler(old);
+        if (old == null && pluginExHandler == null) {
+            //do nothing
+        } else if (old == null && pluginExHandler != null) {
+            UncaugthExceptionWrapper handlerWrapper = new UncaugthExceptionWrapper();
+            handlerWrapper.addHandler(pluginDescriptor.getPackageName(), pluginExHandler);
+            Thread.setDefaultUncaughtExceptionHandler(handlerWrapper);
+        } else if (old != null && pluginExHandler == null) {
+            Thread.setDefaultUncaughtExceptionHandler(old);
+        } else if (old != null && pluginExHandler != null) {
+            if (old == pluginExHandler) {
+                //do nothing
+            } else {
+                if (old instanceof UncaugthExceptionWrapper) {
+                    ((UncaugthExceptionWrapper) old).addHandler(pluginDescriptor.getPackageName(), pluginExHandler);
+                    Thread.setDefaultUncaughtExceptionHandler(old);
+                } else {
+                    //old是宿主设置和handler
+                    UncaugthExceptionWrapper handlerWrapper = new UncaugthExceptionWrapper();
+                    handlerWrapper.setHostHandler(old);
+                    handlerWrapper.addHandler(pluginDescriptor.getPackageName(), pluginExHandler);
+
+                    Thread.setDefaultUncaughtExceptionHandler(handlerWrapper);
+                }
+            }
+        }
 
         if (Build.VERSION.SDK_INT >= 14) {
             // ActivityLifecycleCallbacks 的回调实际是由Activity内部在自己的声明周期函数内主动调用application的注册的callback触发的
             //由于我们把插件Activity内部的application成员变量替换调用了  会导致不会触发宿主中注册的ActivityLifecycleCallbacks
             //那么我们在这里给插件的Application对象注册一个callback bridge。将插件的call发给宿主的call，
             //从而使得宿主application中注册的callback能监听到插件Activity的声明周期
-            pluginApplication.registerActivityLifecycleCallbacks(new LifecycleCallbackBridge(FairyGlobal.getApplication()));
+            pluginApplication.registerActivityLifecycleCallbacks(new LifecycleCallbackBridge(FairyGlobal.getHostApplication()));
         } else {
             //对于小于14的版本，影响是，StubActivity的绑定关系不能被回收，
             // 意味着宿主配置的非Stand的StubActivity的个数不能小于插件中对应的类型的个数的总数，否则可能会出现找不到映射的StubActivity
@@ -259,7 +284,7 @@ public class PluginLauncher implements Serializable {
 
 		//退出Activity
 		LogUtil.d("退出Activity");
-		FairyGlobal.getApplication().sendBroadcast(new Intent(plugin.pluginPackageName + PluginActivityMonitor.ACTION_UN_INSTALL_PLUGIN));
+		FairyGlobal.getHostApplication().sendBroadcast(new Intent(plugin.pluginPackageName + PluginActivityMonitor.ACTION_UN_INSTALL_PLUGIN));
 
 		//退出 LocalBroadcastManager
 		LogUtil.d("退出LocalBroadcastManager");
@@ -297,7 +322,7 @@ public class PluginLauncher implements Serializable {
 			@Override
 			public void run() {
 				//这个方法需要在UI线程运行
-				AndroidWebkitWebViewFactoryProvider.switchWebViewContext(FairyGlobal.getApplication());
+				AndroidWebkitWebViewFactoryProvider.switchWebViewContext(FairyGlobal.getHostApplication());
 
 				//退出BroadcastReceiver
 				//广播一般有个注册方式
@@ -319,7 +344,15 @@ public class PluginLauncher implements Serializable {
 
 		//退出fragment
 		//即退出由FragmentManager保存的Fragment
-		//TODO fragment如何退出？
+        CompatForFragmentClassCache.clearFragmentClassCache();
+        CompatForFragmentClassCache.clearSupportV4FragmentClassCache();
+
+        //移除插件注册的crashHandler
+        //这里不一定能清理干净，因为UncaugthExceptionWrapper可能会被创建多个实例。不过也没什么大的影响
+        Thread.UncaughtExceptionHandler exceptionHandler = Thread.getDefaultUncaughtExceptionHandler();
+        if (exceptionHandler instanceof UncaugthExceptionWrapper) {
+            ((UncaugthExceptionWrapper) exceptionHandler).removeHandler(pluginDescriptor.getPackageName());
+        }
 
 		loadedPluginMap.remove(packageName);
 	}

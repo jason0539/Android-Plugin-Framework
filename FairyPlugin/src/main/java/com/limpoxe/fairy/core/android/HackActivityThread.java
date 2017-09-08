@@ -36,6 +36,10 @@ public class HackActivityThread {
     private static final String Field_mBoundApplication = "mBoundApplication";
     private static final String Field_sPackageManager = "sPackageManager";
 
+    private static final String Field_SERVICE_DONE_EXECUTING_ANON = "SERVICE_DONE_EXECUTING_ANON";
+    private static final String Field_SERVICE_DONE_EXECUTING_START = "SERVICE_DONE_EXECUTING_START";
+    private static final String Field_SERVICE_DONE_EXECUTING_STOP = "SERVICE_DONE_EXECUTING_STOP";
+
     private static HackActivityThread hackActivityThread;
 
     private Object instance;
@@ -72,7 +76,7 @@ public class HackActivityThread {
 
         //有些情况下上面的方法拿不到，下面再换个方法尝试一次
         if (sCurrentActivityThread == null) {
-            Object impl = HackContextImpl.getImpl(FairyGlobal.getApplication());
+            Object impl = HackContextImpl.getImpl(FairyGlobal.getHostApplication());
             if (impl != null) {
                 sCurrentActivityThread = new HackContextImpl(impl).getMainThread();
             }
@@ -86,6 +90,8 @@ public class HackActivityThread {
             Handler handler = hackActivityThread.getHandler();
             Handler.Callback callback = new PluginAppTrace(handler);
             new HackHandler(handler).setCallback(callback);
+        } else {
+            LogUtil.e("wrapHandler fail!!");
         }
     }
 
@@ -96,6 +102,8 @@ public class HackActivityThread {
             if (!(originalInstrumentation instanceof PluginInstrumentionWrapper)) {
                 hackActivityThread.setInstrumentation(new PluginInstrumentionWrapper(originalInstrumentation));
             }
+        } else {
+            LogUtil.e("wrapInstrumentation fail!!");
         }
     }
 
@@ -146,8 +154,8 @@ public class HackActivityThread {
                     HackLoadedApk loadedApk = new HackLoadedApk(pluginLoadedApk);
                     loadedApk.setApplication(pluginApplication);
                     loadedApk.setResources(pluginResource);
-                    loadedApk.setDataDirFile(new File(FairyGlobal.getApplication().getApplicationInfo().dataDir));
-                    loadedApk.setDataDir(FairyGlobal.getApplication().getApplicationInfo().dataDir);
+                    loadedApk.setDataDirFile(new File(FairyGlobal.getHostApplication().getApplicationInfo().dataDir));
+                    loadedApk.setDataDir(FairyGlobal.getHostApplication().getApplicationInfo().dataDir);
                     //TODO 需要时再说
                     //loadedApk.setLibDir();
                 }
@@ -210,6 +218,14 @@ public class HackActivityThread {
 
     public static void setPackageManager(Object packageManager) {
         RefInvoker.setField(null, ClassName, Field_sPackageManager, packageManager);
+    }
+
+    public static Integer getSERVICE_DONE_EXECUTING_ANON() {
+        Integer ret = (Integer) RefInvoker.getField(null, ClassName, Field_SERVICE_DONE_EXECUTING_ANON);
+        if (ret == null) {
+            ret = 0;//default is 0
+        }
+        return ret;
     }
 
 }
