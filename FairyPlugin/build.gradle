@@ -33,4 +33,5 @@ dependencies {
     compile 'com.limpoxe.support:android-servicemanager:1.0.5@aar'
 }
 
-apply from: "./jcenter.gradle"
+//apply from: "./jcenter.gradle"
+apply from: "./maven.gradle"
