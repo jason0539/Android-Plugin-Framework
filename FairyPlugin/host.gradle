@@ -16,7 +16,7 @@ import java.util.zip.ZipInputStream
 //在宿主脚本中apply此脚本, 此脚本一共做了6件事
 //1、编译完成后导出所有资源id，即aaptOptions.additionalParameters这个配置干的事情, 下面第4步需要此文件
 //2、编译宿主资源时插入public.xml，用来控制宿主资源id分组
-//3、编译宿主资源编译完成后导出后缀为.ap_的资源包，此资源包在编译非独立插件时需要此包
+//
 //4、编译完成后根据资源中间文件以及导出的资源id表生成一份主题patch包，编译非独立插件时需要此包
 //5、编译完成后导出宿主的jar，包括宿主的src和其依赖的所有class, 编译非独立插件时需要此包
 //6、编译完成后导出宿主混淆后的jar，包括宿主的src和其依赖的所有class, 编译非独立插件时若插件需要混淆则需要此包
@@ -24,9 +24,18 @@ import java.util.zip.ZipInputStream
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
 
-//getProperties()会从ext {} 配置下取值
-def hasExtPluginProcessName = getProperties().containsKey("pluginProcess")
-def pluginProcessName = getProperties().get("pluginProcess")
+class FaiyExt {
+    private String pluginProcess = ":plugin"
+
+    public String getPluginProcess() {
+        return pluginProcess
+    }
+
+    public void setPluginProcess(String process) {
+        this.pluginProcess = process
+    }
+}
+extensions.create('fairy', FaiyExt)
 
 //第1件事
 android.aaptOptions.additionalParameters("-P", project.buildDir.absolutePath + "/outputs/generated_exported_all_resouces.xml")
@@ -71,19 +80,20 @@ afterEvaluate {
         for (baseVariant in variant.outputs) {
 
             def manifestFilePath = baseVariant.processResources.manifestFile.absolutePath;
-            def tastName = baseVariant.processResources.name
 
             baseVariant.processManifest.doLast {
 
+                println "$manifestOutputDirectory"
                 File manifestFile = new File(manifestFilePath)
 
-                println '正在检查Manifest中的插件配置是否正确' + manifestFilePath
+                println '正在检查Manifest中的插件配置是否正确' + manifestFile.absolutePath
 
                 def originManifestContent = manifestFile.getText('UTF-8')
                 if (originManifestContent.contains("{applicationId}")) {
                     throw new Exception("宿主build.gradle未配置android.defaultConfig.applicationId")
                 }
 
+                //生成prop文件
                 def pattern = Pattern.compile("versionName\\s*=\\s*\"(.+?)\"");
                 def matcher = pattern.matcher(originManifestContent);
                 if (matcher.find()) {
@@ -103,24 +113,27 @@ afterEvaluate {
 
                 //指定插件进程名，设置为空串或者null即是和宿主同进程
                 //不设置即使用默认进程(:plugin)
-                if (hasExtPluginProcessName) {
+                def pluginProcessName = fairy.pluginProcess
+                if (!":plugin".equals(pluginProcessName)) {
                     def customPluginProcessName = "";
                     if (pluginProcessName != null) {
                         customPluginProcessName = "android:process=\"" + pluginProcessName + "\""
                     }
+                    println '正在设置插件进程配置：' + customPluginProcessName
                     def modifyedManifestContent = originManifestContent.replaceAll("android:process=\":plugin\"", customPluginProcessName)
                     manifestFile.write(modifyedManifestContent, 'UTF-8')
-                    baseVariant.processResources.manifestFile = manifestFile
                 }
             }
 
+            //实际上最新版sdk和gralde可以直接指定apk了
             def processResourcesTask = baseVariant.getProcessResources();
+            def processResFullName = baseVariant.apkData.fullName
             processResourcesTask.doLast {
-                println '编译宿主资源编译完成后导出后缀为.ap_的资源包，此资源包在编译非独立插件时需要此包'
                 copy {
-                    from processResourcesTask.packageOutputFile
+                    println '编译宿主资源编译完成后导出后缀为.ap_的资源包，此资源包在编译非独立插件时需要此包'
+                    from processResourcesTask.resPackageOutputFolder
                     into("${project.buildDir}/outputs/")
-                    rename('resources', project.name + "-resources")
+                    rename("-${processResFullName}", "")
                 }
             }
         }
@@ -133,9 +146,9 @@ afterEvaluate {
 
             def flavorBuildType = javaCompile.name.replace("compile", "").replace("JavaWithJavac", "");
             def flavor = flavorBuildType.toLowerCase().replace(buildType, "")
-            println "Merge Jar After Task " + javaCompile.name + " buildType is " + buildType
+            println "Merge Jar After Task " + javaCompile.name + " buildType is " + buildType + ", " + flavorBuildType + ", " + flavor
 
-            File jarFile = new File(project.buildDir, "outputs/" + project.name + "-" + flavorBuildType + ".jar")
+            File jarFile = new File(project.buildDir, "outputs/host_classes.jar")
             if (jarFile.exists()) {
                 jarFile.delete()
             }
@@ -155,18 +168,18 @@ afterEvaluate {
                     jarMerger.addJar(jarPath);
                     //jarMerger.addFolder(directoryInput.getFile());
                 }
-                File classes = new File(buildDir, 'intermediates/packaged/' + (flavor.equals("")?"":(flavor + "/")) + buildType + "/classes.jar");
+                File classes = new File(buildDir, 'intermediates/classes-jar/' + (flavor.equals("")?"":(flavor + "/")) + buildType + "/classes.jar");
 
                 println "classes path is " + classes.absolutePath
 
                 if (!classes.exists()) {
                     try {
-                        tasks.getByName("jar" + flavorBuildType +  "Classes").execute()
+                        tasks.getByName("bundleAppClasses" + flavorBuildType).execute()
                     } catch(Exception e) {
-                        println "fail to create jar for task " + javaCompile.name
+                        println "fail to create jar for task " + javaCompile.name + " " + "bundleAppClasses" + flavorBuildType
                     }
                 } else {
-                    println "classes path not exist " + classes.absolutePath
+                    println "classes path already exists： " + classes.absolutePath
                 }
                 if (classes.exists()) {
                     jarMerger.addJar(classes)
@@ -185,14 +198,15 @@ afterEvaluate {
         def variantName = variant.name
         if (proguardTask) {
             proguardTask.doFirst {
-                println "开始混淆任务" + variantName.capitalize()
+                println "开始混淆任务：" + variantName.capitalize()
             }
             proguardTask.doLast {
-                println "混淆完成" + variantName.capitalize()
+                println "混淆完成：" + variantName.capitalize()
                 boolean isFind = false;
                 proguardTask.outputs.files.files.each { File file->
                     //http://blog.csdn.net/sbsujjbcy/article/details/50839263
                     //build/intermediates/transforms/proguard/anzhi/release/jars/3/1f/main.jar
+                    //最新版本路径已发生变化；2017-11-12
                     project.logger.error "file outputs=>${file.absolutePath}"
                     String keyword = File.separator + "transforms" + File.separator + "proguard" + File.separator;
                     println String.valueOf(file.absolutePath.contains(keyword)) + ", " + String.valueOf(file.absolutePath.endsWith(buildType))
@@ -202,9 +216,9 @@ afterEvaluate {
                         println "导出混淆后的宿主jar包" + "${project.buildDir}/outputs/" + "host_" + variantName + "_obfuscated" + ".jar"
 
                         copy {
-                            from file.absolutePath + "/jars/3/1f/main.jar"
+                            from file.absolutePath + "/0.jar"
                             into("${project.buildDir}/outputs/")
-                            rename('main', "host_" + variantName + "_obfuscated")
+                            rename('0', "host_" + variantName + "_obfuscated")
                         }
                     }
                 }
@@ -231,6 +245,8 @@ afterEvaluate {
                     createThemePatch(buildFavType.replace("Ftest", "").toLowerCase(), "ftest");
                 }
             }
+        } else if (task.name.startsWith("assemble")) {
+            task.finalizedBy makeHostBaseLine
         }
     }
 
@@ -239,6 +255,16 @@ afterEvaluate {
         it.startsWith("assemble") || it.startsWith("build")
     } != null) {
         //nothing
+    }
+}
+
+//将宿主编译产物作为基线包存档，这样可以使插件脱离宿主工程独立编译
+task makeHostBaseLine(type: Zip) {
+    extension "bar" //Baseline Application Resource
+    baseName 'host'
+    from zipTree("build/outputs/resources.ap_")
+    from('build/outputs') {
+        exclude '*.ap_'
     }
 }
 
@@ -480,7 +506,6 @@ public class ThemeProcessor extends DefaultHandler {
     }
 
 }
-
 
 public class JarMerger {
     private final byte[] buffer = new byte[8192];
