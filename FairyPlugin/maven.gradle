@@ -1,0 +1,29 @@
+apply plugin: 'signing'
+apply plugin: 'maven'
+
+signing {
+    required { gradle.taskGraph.hasTask("uploadArchives") }
+    sign configurations.archives
+}
+
+uploadArchives {
+    configuration = configurations.archives
+    repositories.mavenDeployer {
+        beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+        repository(url: 'http://nexus.kedouinc.net:8081/nexus/content/repositories/android/') {
+            //仓库地址
+            authentication(userName: "admin",//用户名
+                    password: "20140919")//密码
+        }
+
+        pom.project {
+            name 'solo-android-finger-plugin'
+            packaging 'aar'
+            description 'none'
+            url 'http://nexus.kedouinc.net:8081/nexus/content/repositories/android/'//仓库地址
+            groupId "com.tuotuo.solo"
+            artifactId "tuoAndroidPluginFramework"
+            version "0.0.58.1"
+        }
+    }
+}

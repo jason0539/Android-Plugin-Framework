@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 
 import static android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+import static android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
 import static com.limpoxe.fairy.manager.mapping.PluginStubBinding.buildDefaultAction;
 
 public class StubActivityMappingProcessor implements StubMappingProcessor {
@@ -35,7 +36,8 @@ public class StubActivityMappingProcessor implements StubMappingProcessor {
     private static HashMap<String, String> singleTopActivityMapping = new HashMap<String, String>();
     private static HashMap<String, String> singleInstanceActivityMapping = new HashMap<String, String>();
     private static String standardActivity = null;
-    private static String standardLandspaceActivity = null;
+    private static String standardLandspaceActivity = null;//配置了configChanges的横屏
+    private static String standardPortraitActivity = null;//配置了configChanges的竖屏
     private static String standardActivityTranslucent = null;
 
     private static boolean isPoolInited = false;
@@ -98,6 +100,8 @@ public class StubActivityMappingProcessor implements StubMappingProcessor {
 
             if (info.getScreenOrientation() != null && Integer.parseInt(info.getScreenOrientation()) == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) {
                 return standardLandspaceActivity;
+            }else if (info.getScreenOrientation() != null && Integer.parseInt(info.getScreenOrientation()) == SCREEN_ORIENTATION_PORTRAIT) {
+                return standardPortraitActivity;
             }
 
             return standardActivity;
@@ -172,6 +176,7 @@ public class StubActivityMappingProcessor implements StubMappingProcessor {
 
         return className.equals(standardActivity)
                 || className.equals(standardLandspaceActivity)
+                || className.equals(standardPortraitActivity)
                 || className.equals(standardActivityTranslucent)
                 || singleTaskActivityMapping.containsKey(className)
                 || singleTopActivityMapping.containsKey(className)
@@ -217,7 +222,9 @@ public class StubActivityMappingProcessor implements StubMappingProcessor {
                         standardActivityTranslucent = resolveInfo.activityInfo.name;
                     } else if (resolveInfo.activityInfo.screenOrientation == SCREEN_ORIENTATION_LANDSCAPE) {
                         standardLandspaceActivity = resolveInfo.activityInfo.name;
-                    } else {
+                    } else if (resolveInfo.activityInfo.screenOrientation == SCREEN_ORIENTATION_PORTRAIT) {
+                        standardPortraitActivity = resolveInfo.activityInfo.name;
+                    }else {
                         standardActivity = resolveInfo.activityInfo.name;
                     }
                 }
