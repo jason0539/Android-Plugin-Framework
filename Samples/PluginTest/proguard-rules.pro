@@ -5,6 +5,7 @@
 -dontpreverify  #不预校验
 -verbose #混淆时是否记录日志
 -ignorewarning #忽略警告
+-dontshrink #禁用压缩--重要
 
 #混淆时所采用的算法
 -optimizations !code/simplification/arithmetic,!field/*,!class/merging/*
@@ -122,6 +123,13 @@
     *;
 }
 # 保护AIDL End
+
+-keep class com.example.plugintest.fragment.PluginSpecFragment {
+    *;
+}
+-keep class com.example.plugintest.fragment.PluginNormalFragment {
+    *;
+}
 
 # 注意检查这个配置的路径是否正确，这里使用的debug路径
 -applymapping ../PluginMain/build/outputs/mapping/debug/mapping.txt
