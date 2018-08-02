@@ -4,10 +4,13 @@ README: [中文](https://github.com/limpoxe/Android-Plugin-Framework/blob/master
 
 Android-Plugin-Framework是一个Android插件化框架，用于通过动态加载的方式免安装运行插件apk
 
-#### 最新版本: 0.0.59-snapshot
+#### 最新版本: 0.0.63-snapshot
               此版本需要com.android.tools.build:gradle:3.0.0和gradle-4.1
-              若gradle插件低于此版本请将框架版本和脚本版本都切为0.0.58-snapshot
-
+              若gradle插件低于此版本请将框架版本和脚本版本都切为0.0.58-snapshot：
+              宿主：apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.58-snapshot/FairyPlugin/host.gradle"
+              插件：apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.58-snapshot/FairyPlugin/plugin.gradle"
+              重要：需要在根目录的gradle.properties文件中配置android.enableAapt2=false
+               
 #### 项目结构
 
 | 文件夹        |     说明     |
@@ -46,12 +49,13 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 - 支持DataBinding（仅限独立插件）
 - 支持插件WebView加载插件本地HTML文件
 - 支持插件Fragment/View内嵌宿主Activity中
+- 支持FileProvider
 
 #### LIMIT
 - 不支持插件Activity转场动画使用插件中的动画资源
 - 不支持插件Manifest中申请权限，所有权限必须预埋到宿主Manifest中
 - 不支持第三方app试图唤起插件中的组件时直接使用插件组件的Intent。
-  第三方app要唤起插件中的静态组件必须由宿主程序进行桥接，即此组件需同时预埋到宿主和插件的Manifest中
+  第三方app要唤起插件中的静态组件，例如Activity/service/Provider，必须由宿主程序进行桥接，即此组件需同时预埋到宿主和插件的Manifest中
 - 不支持android.app.NativeActivity
 - 不支持当一个插件依赖另一个插件时，被插件依赖的包含资源
 - 不支持插件中的webview弹出```原生Chrome组件```
@@ -61,14 +65,14 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
        如果是使用的Chrome Webview，则不支持。因为它packageId是以0x7f开头，会和插件冲突。
        这是采用Public.xml进行资源分组的缺陷。
 - 可能不支持对插件或者宿主进行加壳加固处理，未尝试
-    
+
 # HOW TO USE
 #### 宿主侧
 1、 新建一个工程，作为宿主工程
 
 2、 在宿主工程的build.gradle文件下添加如下3个配置
 ```
-    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/host.gradle"        
+    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.63-snapshot/FairyPlugin/host.gradle"        
 
     android {
         defaultConfig {
@@ -81,9 +85,9 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 ```
     dependencies {
         //请务必使用@aar结尾，以中断依赖传递
-        compile('com.limpoxe.fairy:FairyPlugin:0.0.59-snapshot@aar')
+        implementation('com.limpoxe.fairy:FairyPlugin:0.0.63-snapshot@aar')
         //可选，用于支持插件全局函数式服务，不使用全局函数式服务不需要添加此依赖
-        //compile('com.limpoxe.support:android-servicemanager:1.0.5@aar')
+        //implementation('com.limpoxe.support:android-servicemanager:1.0.5@aar')
     }
 ```
 
@@ -146,32 +150,35 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
    以上所有内容及更多详情可以参考Demo
 	
 #### 插件侧  
-独立插件：新建一个工程, 作为插件工程，无需任何其他配置，编译出来即可当插件apk安装到宿主中。
+独立插件：
+
+    新建一个工程, 作为插件工程，无需任何其他配置，编译出来即可当插件apk安装到宿主中。
 
 非独立插件：
 
 1、新建一个工程, 作为插件工程。
-
-2、在插件AndroidManifest.xml中manifest节点中增加如下配置:
-```       
-    <manifest android:sharedUserId="这里填写宿主工程包名"/>
-```       
-此配置```与其原始含义无关```。插件框架识别一个插件是否为独立插件，是根据插件的manifest文件中的android:sharedUserId配置来判断，
-将android:sharedUserId设置为宿主的packageName，则表示为非独立插件，不设置或者设置为其他值，则表示为独立插件。
-                 
-3、在build.gradle中添加如下2个配置
+            
+2、在build.gradle中添加如下2个配置
 ```
-    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/plugin.gradle"
+    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.63-snapshot/FairyPlugin/plugin.gradle"
 
+    android {
+        defaultConfig {
+            //这个配置不可省略
+            applicationId 插件app包名        
+        }
+    }
+    
     dependencies {
         //***这是demo中的示例，请根据自己的实际情况修改，作用是指向插件依赖的宿主基线包***
         //支持文件、maven坐标等写法
+        //baselinePatch 'xxx:xxx:xxx@bar'
         baselinePatch files(project(':Samples:PluginMain').getBuildDir().absolutePath + '/distributions/host.bar')
     }
 
  ```       
   
-  完成以上3步后即可编译出非独立插件，以上所有内容及更多详情可以参考Demo
+  完成以上2步后即可编译出非独立插件，以上所有内容及更多详情可以参考Demo
   
 #### Demo编译方法
     
@@ -215,7 +222,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
         并在插件A的build.gradle文件中使用provided添加对插件B的jar的依赖。
         
        此处uses-library与其原始含义无关，仅作一个配置项取巧使用。
-       限制：被插件依赖的插件只可以包含class和Manifest和assets等文件，不可以携带资源文件。可参考demo中的pluginBase工程
+       限制：被插件依赖的插件只可以包含class和Manifest和assets等文件，不可以携带资源文件。可参考demo中的pluginTestBase工程
         
 2. 如何使独立插件依赖其他插件
    
@@ -353,8 +360,6 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
          因此，针对这两种case，需要在初始化插件sdk是，传入fakeContext而不是插件的Context来欺骗sdk，使其能拿到正确信息。
         
          在demo中，微信sdk插件的FakeContext，即是用来解决上面所说的第一种情况。
-         百度地图sdk的FakeContext，即是用来解决上面所说的第二种情况（实际上百度地图SDK可以直接使用插件包去平台上注册，
-         不需要使用宿主注册，demo这里仅仅作为验证演示，特意使用了宿主注册appkey）。
          
          demo中的fakeContext重写了需要的相关方法。
          
@@ -399,7 +404,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 
     由于插件并没有正常安装到系统中，插件组件的Intent不能被系统识别，因此外部应用或者系统需要直接唤起插件组件时，需要将插件Intent在宿主的Manifest中        
     也预置一份，并在IntentFilter增加STUB_EXACT配置，如：
-
+        //添加Receeiver桥接
         <receiver android:name="com.example.plugintest.receiver.BootCompletedReceiver"
               android:process=":plugin">
             <intent-filter>
@@ -414,6 +419,32 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
                     android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </receiver>
+        
+        //添加Activity桥接
+        <activity
+            android:name="com.example.pluginmain.wxapi.WXEntryActivity"
+            android:process=":plugin"
+            android:exported="true">
+            <!--下面是额外添加的配置项，作用是使得框架将此组件配置识别为插件组件 -->
+            <intent-filter>
+                <action
+                    android:name="${applicationId}.STUB_EXACT" />
+                <category
+                    android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        
+        //添加Provider桥接
+        //Provider桥接的写法稍有不同
+        //1、将从插件Manifest复制过来的provider配置中的name都改为固定值：com.limpoxe.fairy.core.bridge.ProviderClientProxy
+        //2、不需要添加STUB_EXACT的intent-filter
+        //例如，将插件中定义的一个provider的authorities添加到宿主，使其支持外部应用直接访问：
+        <provider
+            android:name="com.limpoxe.fairy.core.bridge.ProviderClientProxy"
+            android:authorities="a.b.c.fileprovider"
+            android:grantUriPermissions="true"
+            android:exported="false">
+        </provider>
         
        可以参考demo        
 

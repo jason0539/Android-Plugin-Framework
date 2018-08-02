@@ -22,7 +22,7 @@ import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.pm.SharedLibraryInfo;
 import android.content.pm.VersionedPackage;
-import android.content.res.*;
+import android.content.res.Resources;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.UserHandle;
@@ -97,7 +97,7 @@ public class FakeUtil {
                     @Override
                     public PackageInfo getPackageInfo(String packageName, int flags) throws NameNotFoundException {
                         PackageInfo packageInfo = pm.getPackageInfo(packageName, flags);
-                        if ((flags & PackageManager.GET_SIGNATURES) != 0 ) {
+                        if ((flags & PackageManager.GET_SIGNATURES) != 0) {
                             //返回宿主签名
                             packageInfo.signatures = pm.getPackageInfo(getPackageName(), flags).signatures;
                         }
@@ -118,7 +118,7 @@ public class FakeUtil {
                                 context = ((ContextWrapper) context).getBaseContext();
                             }
                             //返回宿主meta
-                            applicationInfo.metaData = context.getApplicationInfo().metaData;
+                            applicationInfo.metaData = pm.getApplicationInfo(getPackageName(), flags).metaData;
                         }
                         return applicationInfo;
                     }

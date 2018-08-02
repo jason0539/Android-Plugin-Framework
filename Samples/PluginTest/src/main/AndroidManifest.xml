@@ -1,14 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-   这里配置sharedUserId的作用，是为了告诉宿主程序，
-   这个插件需要依赖宿主程序的class和资源，即表示这个插件是一个非独立插件，
-   如果不配置这个参数，表示这个插件是一个独立插件，即本身可以独立安装运行
- -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.plugintest"
     android:versionCode="1"
-    android:versionName="1.0.1"
-    android:sharedUserId="com.example.pluginmain" >
+    android:versionName="1.0.1">
 
     <uses-sdk
         android:minSdkVersion="11"
@@ -222,7 +216,7 @@
         <provider
             android:exported="true"
             android:authorities="com.example.plugintest.provider"
-            android:name="com.example.plugintest.provider.PluginContentProvider"/>
+            android:name="com.example.plugintest.provider.PluginTestProvider"/>
 
         <service android:name="com.example.plugintest.service.TestAccessibilitySerivce"
             android:permission='android.permission.BIND_ACCESSIBILITY_SERVICE'>
@@ -232,6 +226,16 @@
         </service>
 
         <activity android:name="com.example.plugintest.activity.DesignActivity" android:theme="@style/Theme.DesignDemo"/>
+
+        <provider
+            android:name="android.support.v4.content.FileProvider"
+            android:authorities="a.b.c.fileprovider"
+            android:grantUriPermissions="true"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/filepath" />
+        </provider>
 
     </application>
 

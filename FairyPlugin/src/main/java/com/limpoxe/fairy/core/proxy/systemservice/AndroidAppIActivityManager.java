@@ -3,25 +3,33 @@ package com.limpoxe.fairy.core.proxy.systemservice;
 import android.app.ActivityManager;
 import android.app.Service;
 import android.content.Intent;
+import android.content.pm.ProviderInfo;
 import android.os.Build;
 import android.os.IBinder;
 
 import com.limpoxe.fairy.content.PluginDescriptor;
+import com.limpoxe.fairy.content.PluginProviderInfo;
 import com.limpoxe.fairy.core.FairyGlobal;
-import com.limpoxe.fairy.core.PluginShadowService;
+import com.limpoxe.fairy.core.bridge.PluginShadowService;
 import com.limpoxe.fairy.core.android.HackActivityManager;
 import com.limpoxe.fairy.core.android.HackActivityManagerNative;
 import com.limpoxe.fairy.core.android.HackActivityThread;
+import com.limpoxe.fairy.core.android.HackContentProviderHolder;
 import com.limpoxe.fairy.core.android.HackSingleton;
+import com.limpoxe.fairy.core.bridge.ProviderClientProxy;
 import com.limpoxe.fairy.core.proxy.MethodDelegate;
 import com.limpoxe.fairy.core.proxy.MethodProxy;
 import com.limpoxe.fairy.core.proxy.ProxyUtil;
+import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.LogUtil;
 import com.limpoxe.fairy.util.PendingIntentHelper;
 import com.limpoxe.fairy.util.ProcessUtil;
 import com.limpoxe.fairy.util.ResourceUtil;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -35,6 +43,7 @@ public class AndroidAppIActivityManager extends MethodProxy {
         sMethods.put("getIntentSender", new getIntentSender());
         sMethods.put("overridePendingTransition", new overridePendingTransition());
         sMethods.put("serviceDoneExecuting", new serviceDoneExecuting());
+        sMethods.put("getContentProvider", new getContentProvider());
 
         //暂不需要
         //sMethods.put("broadcastIntent", new broadcastIntent());
@@ -167,4 +176,52 @@ public class AndroidAppIActivityManager extends MethodProxy {
         }
     }
 
+    public static class getContentProvider extends MethodDelegate {
+
+        //ApplicationThread, auth, userId, stable
+        @Override
+        public Object afterInvoke(Object target, Method method, Object[] args, Object beforeInvoke, Object invokeResult) {
+            //非插件进程
+            if (!ProcessUtil.isPluginProcess()) {
+                if (invokeResult == null) {
+                    String auth = (String)args[1];
+                    ArrayList<PluginDescriptor> list = PluginManagerHelper.getPlugins();
+                    for(PluginDescriptor pluginDescriptor : list) {
+                        HashMap<String, PluginProviderInfo> map = pluginDescriptor.getProviderInfos();
+                        if (map != null) {
+                            Iterator<PluginProviderInfo> iterator = map.values().iterator();
+                            while(iterator.hasNext()) {
+                                PluginProviderInfo pluginProviderInfo = iterator.next();
+                                //在插件中找到了匹配的contentprovider
+                                if (auth != null && auth.equals(pluginProviderInfo.getAuthority())) {
+                                    //先检查插件是否已经初始化
+                                    boolean isrunning = PluginManagerHelper.isRunning(pluginDescriptor.getPackageName());
+                                    if (!isrunning) {
+                                        isrunning = PluginManagerHelper.wakeup(pluginDescriptor.getPackageName());
+                                    }
+                                    if (!isrunning) {
+                                        return invokeResult;
+                                    }
+
+                                    ProviderInfo providerInfo = new ProviderInfo();
+                                    providerInfo.applicationInfo = FairyGlobal.getHostApplication().getApplicationInfo();
+                                    providerInfo.authority = auth;
+                                    providerInfo.name = ProviderClientProxy.class.getName();
+                                    providerInfo.packageName = FairyGlobal.getHostApplication().getPackageName();
+                                    Object holder = HackContentProviderHolder.newInstance(providerInfo);
+
+                                    if (holder != null) {
+                                        return holder;
+                                    } else {
+                                        return invokeResult;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return invokeResult;
+        }
+    }
 }

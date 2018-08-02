@@ -5,7 +5,7 @@ buildscript {
         google()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:3.0.0'
+        classpath 'com.android.tools.build:gradle:3.0.1'
 
         classpath 'com.jfrog.bintray.gradle:gradle-bintray-plugin:1.5'
         classpath 'com.github.dcendents:android-maven-gradle-plugin:1.4.1'
@@ -24,4 +24,16 @@ allprojects {
         //Finger仓库
         maven { url "http://192.168.3.1:8081/nexus/content/repositories/android/" }
     }
+}
+
+ext {
+
+    //定义常量，方便统一切换脚本的版本
+    //HOST_FAIRY_SCRIPT = "/Users/cailiming/develop/Android-Plugin-Framework/FairyPlugin/host.gradle"
+    //HOST_FAIRY_SCRIPT = "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/host.gradle"
+    HOST_FAIRY_SCRIPT = "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.63-snapshot/FairyPlugin/host.gradle"
+
+    //PLUGIN_FAIRY_SCRIPT = '/Users/cailiming/develop/Android-Plugin-Framework/FairyPlugin/plugin.gradle'
+    //PLUGIN_FAIRY_SCRIPT = "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/plugin.gradle"
+    PLUGIN_FAIRY_SCRIPT = "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.63-snapshot/FairyPlugin/plugin.gradle"
 }

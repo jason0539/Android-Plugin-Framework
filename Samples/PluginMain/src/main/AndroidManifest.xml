@@ -57,16 +57,13 @@
     <uses-permission android:name="android.permission.BIND_ACCESSIBILITY_SERVICE" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.READ_LOGS" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:name=".MyApplication"
         android:icon="@mipmap/cust_ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/ShareTheme" >
-
-        <meta-data
-            android:name="com.baidu.lbsapi.API_KEY"
-            android:value="zcV8rayjavRIRLmepXmzGBVx" />
 
         <meta-data android:value="591d0ae61061d23ca5000dbf" android:name="UMENG_APPKEY"/>
         <meta-data android:value="Main_CN" android:name="UMENG_CHANNEL"/>
@@ -161,6 +158,13 @@
             android:name="android.support.VERSION"
             android:value="27.0.0" />
         <!--Demo config for plugin AdMob end -->
+
+        <provider
+            android:name="com.limpoxe.fairy.core.bridge.ProviderClientProxy"
+            android:authorities="a.b.c.fileprovider"
+            android:grantUriPermissions="true"
+            android:exported="false">
+        </provider>
 
     </application>
 

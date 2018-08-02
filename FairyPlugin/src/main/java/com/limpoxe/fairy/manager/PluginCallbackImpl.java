@@ -7,7 +7,7 @@ import com.limpoxe.fairy.core.FairyGlobal;
 /**
  * Created by cailiming on 2015/9/13.
  */
-public class PluginCallbackImpl implements PluginCallback {
+public class PluginCallbackImpl implements PluginStatusChangeListener {
 
     @Override
     public void onInstall(int result, String packageName, String version,  String src) {
@@ -28,15 +28,6 @@ public class PluginCallbackImpl implements PluginCallback {
         intent.putExtra(EXTRA_TYPE, TYPE_REMOVE);
         intent.putExtra(EXTRA_ID, packageName);
         intent.putExtra(EXTRA_RESULT_CODE, code);
-        FairyGlobal.getHostApplication().sendBroadcast(intent);
-    }
-
-    @Override
-    public void onRemoveAll(boolean success) {
-        Intent intent = new Intent(ACTION_PLUGIN_CHANGED);
-        intent.setPackage(FairyGlobal.getHostApplication().getPackageName());
-        intent.putExtra(EXTRA_TYPE, TYPE_REMOVE_ALL);
-        intent.putExtra(EXTRA_RESULT_CODE, success?PluginManagerHelper.SUCCESS:PluginManagerHelper.INSTALL_FAIL);
         FairyGlobal.getHostApplication().sendBroadcast(intent);
     }
 

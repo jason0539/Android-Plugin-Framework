@@ -2,12 +2,16 @@ package com.example.pluginmain;
 
 import android.Manifest;
 import android.content.BroadcastReceiver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.database.Cursor;
+import android.net.Uri;
 import android.os.Bundle;
+//import android.provider.BaseColumns;
 import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -26,11 +30,12 @@ import com.example.pluginsharelib.SharePOJO;
 import com.limpoxe.fairy.content.PluginDescriptor;
 import com.limpoxe.fairy.core.PluginCreator;
 import com.limpoxe.fairy.manager.PluginCallback;
+import com.limpoxe.fairy.manager.PluginManager;
 import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.FileUtil;
 import com.limpoxe.fairy.util.LogUtil;
 import com.limpoxe.fairy.util.ResourceUtil;
-import com.umeng.analytics.MobclickAgent;
+//import com.umeng.analytics.MobclickAgent;
 
 import java.io.File;
 import java.io.IOException;
@@ -103,7 +108,7 @@ public class MainActivity extends AppCompatActivity {
 
 			@Override
 			public void onClick(View v) {
-                MobclickAgent.onEvent(MainActivity.this, "test_0");
+                //MobclickAgent.onEvent(MainActivity.this, "test_0");
 
                 if (!isInstalled) {
 					if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -177,7 +182,7 @@ public class MainActivity extends AppCompatActivity {
                 view.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        MobclickAgent.onEvent(MainActivity.this, "test_1");
+                        //MobclickAgent.onEvent(MainActivity.this, "test_1");
                         testStartActivity2(pluginDescriptor);
                     }
                 });
@@ -185,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
                 uninstall.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        MobclickAgent.onEvent(MainActivity.this, "test_2");
+                        //MobclickAgent.onEvent(MainActivity.this, "test_2");
                         PluginManagerHelper.remove(pluginDescriptor.getPackageName());
                         refreshListView();
                     }
@@ -199,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
         other.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                MobclickAgent.onEvent(MainActivity.this, "test_3");
+                //MobclickAgent.onEvent(MainActivity.this, "test_3");
                 startActivity(new Intent(MainActivity.this, TestCaseListActivity.class));
             }
         });
@@ -326,18 +331,61 @@ public class MainActivity extends AppCompatActivity {
 		}
 	}
 
+	//测试在宿主中调用插件的conentProvider
+    public static final String AUTHORITY = "com.example.plugintest.provider";
+    public static final Uri CONTENT_URI = Uri.parse("content://"+ AUTHORITY + "/pluginfirst");
+    public static final String MY_FIRST_PLUGIN_NAME = "my_first_plugin_name";
+
 	@Override
 	protected void onResume() {
 		super.onResume();
+
 		//打印一下目录结构
-		FileUtil.printAll(new File(getApplicationInfo().dataDir));
-        MobclickAgent.onResume(this);
+		//FileUtil.printAll(new File(getApplicationInfo().dataDir));
+
+        //MobclickAgent.onResume(this);
+
+        testProvider();
 	}
+
+	private void testProvider() {
+
+        //测试在宿主中调用插件的conentProvider,
+        //因为目标在插件中，所以要先判断插件是否已经安装
+        boolean isInstalled = PluginManager.isInstalled("com.example.plugintest");
+        boolean isRunning = PluginManager.isRunning("com.example.plugintest");
+	    if (!isInstalled || !isRunning) {
+	        return;
+        }
+
+        ContentValues values = new ContentValues();
+        values.put(MY_FIRST_PLUGIN_NAME, "test web" + System.currentTimeMillis());
+        Uri uri = getContentResolver().insert(CONTENT_URI, values);
+        LogUtil.d("insert", "uri=" + uri);
+
+        boolean isSuccess = false;
+        Cursor cursor = getContentResolver().query(CONTENT_URI, null, null, null, null);
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                int index = cursor.getColumnIndex(MY_FIRST_PLUGIN_NAME);
+                if (index != -1) {
+                    isSuccess = true;
+                    String pluginName = cursor.getString(index);
+                    Log.d("query", pluginName);
+                    Toast.makeText(this, "ContentResolver " + pluginName + " count=" + cursor.getCount(), Toast.LENGTH_LONG).show();
+                }
+            }
+            cursor.close();
+        }
+        if (!isSuccess) {
+            Toast.makeText(this, "ContentResolver 查无数据", Toast.LENGTH_LONG).show();
+        }
+    }
 
     @Override
     protected void onPause() {
         super.onPause();
-        MobclickAgent.onPause(this);
+        //MobclickAgent.onPause(this);
     }
 
     @Override
