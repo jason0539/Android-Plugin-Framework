@@ -23,7 +23,7 @@ uploadArchives {
             url 'http://nexus.kedouinc.net:8081/nexus/content/repositories/android/'//仓库地址
             groupId "com.tuotuo.solo"
             artifactId "tuoAndroidPluginFramework"
-            version "0.0.59.1"
+            version "0.0.63.1"
         }
     }
 }
