@@ -209,7 +209,7 @@ class PluginManagerService {
         // 先将apk复制到宿主程序私有目录，防止在安装过程中文件被篡改
 		if (!srcPluginFile.startsWith(FairyGlobal.getHostApplication().getCacheDir().getAbsolutePath())) {
 			String tempFilePath = FairyGlobal.getHostApplication().getCacheDir().getAbsolutePath()
-					+ File.separator + System.currentTimeMillis() + ".apk";
+					+ File.separator + System.currentTimeMillis() + "_" + srcFile.getName() + ".apk";
 			if (FileUtil.copyFile(srcPluginFile, tempFilePath)) {
 				srcPluginFile = tempFilePath;
 			} else {
@@ -339,6 +339,7 @@ class PluginManagerService {
 
             //万事具备 添加到已安装插件列表
 			pluginDescriptor.setInstalledPath(destApkPath);
+			pluginDescriptor.setInstallationTime(System.currentTimeMillis());
             PackageInfo packageInfo = pluginDescriptor.getPackageInfo(PackageManager.GET_GIDS);
             if (packageInfo != null) {
                 pluginDescriptor.setApplicationTheme(packageInfo.applicationInfo.theme);

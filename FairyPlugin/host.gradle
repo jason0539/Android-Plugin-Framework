@@ -23,6 +23,13 @@ import java.util.zip.ZipInputStream
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////
+configurations {
+    innerPlugin
+}
+
+def AndroidGradlePluginVersion = getPlugins().findPlugin("com.android.application").androidBuilder.createdBy
+
+def innerPluginApkList = []
 
 class FaiyExt {
     private String pluginProcess = ":plugin"
@@ -46,6 +53,11 @@ afterEvaluate {
         throw new Exception("宿主build.gradle未配置android.defaultConfig.applicationId")
     }
 
+    configurations.innerPlugin.files.each { file ->
+        //收集插件文件地址
+        innerPluginApkList << file.absolutePath
+    }
+
     for (variant in android.applicationVariants) {
 
         def varName = variant.name;
@@ -61,8 +73,16 @@ afterEvaluate {
         //第2件事
         mergeTask.doLast {
             String destPath = mergeTask.outputDir.absolutePath + '/values/';
+            //如果是通过本地路径引入的此脚本
             if (buildscript.sourceFile != null) {
-                println '编译宿主资源时插入' + buildscript.sourceFile.getParentFile().absolutePath + '/public.xml 到' + destPath + ', 用来控制宿主资源id分组'
+
+                def publicXmlPath = buildscript.sourceFile.getParentFile().absolutePath + '/public.xml'
+                println '编译宿主资源时插入' + publicXmlPath + ' 到 ' + destPath + ', 用来控制宿主资源id分组'
+
+                if(!file(publicXmlPath).exists()) {
+                    throw new FileNotFoundException("public.xml 文件未找到，请检查路径：" + (buildscript.sourceFile.getParentFile().absolutePath + '/public.xml'))
+                }
+
                 copy {
                     from(buildscript.sourceFile.getParentFile()) {
                         include 'public.xml'
@@ -83,6 +103,28 @@ afterEvaluate {
                 ouput.close()
                 httpConn.disconnect()
             }
+
+            if (!file(destPath + "public.xml").exists()) {
+                throw new FileNotFoundException("文件不存在：" + destPath + "public.xml")
+            }
+        }
+
+        def mergeAssetsTask = tasks.getByName(scope.getMergeAssetsTask().name)
+        mergeAssetsTask.setOnlyIf { true }
+        mergeAssetsTask.outputs.upToDateWhen { false }
+        mergeAssetsTask.doLast {
+
+            innerPluginApkList.each { innerAPK ->
+                if (!file(innerAPK).exists()) {
+                    project.logger.info "引用的插件apk文件不存在，可能插件apk还未编译完成，或者宿主innerPlugin配置的路径错误：", innerAPK
+                }
+            }
+
+            copy {
+                println '复制宿主依赖的内置插件到merge后的assets目录\n' + innerPluginApkList + "\n" + mergeAssetsTask.outputDir
+                from files(innerPluginApkList)
+                into(mergeAssetsTask.outputDir)
+            }
         }
 
         //第3件事
@@ -92,7 +134,9 @@ afterEvaluate {
 
             baseVariant.processManifest.doLast {
 
-                println "$manifestOutputDirectory"
+                //android gradle3.+的属性
+                //println "$manifestOutputDirectory"
+
                 File manifestFile = new File(manifestFilePath)
 
                 println '正在检查Manifest中的插件配置是否正确' + manifestFile.absolutePath
@@ -118,6 +162,8 @@ afterEvaluate {
                     hostInfo.append("\nhost.versionCode=" + android.defaultConfig.versionCode)
                     //versionName可能有后缀，所以以Manifest中为准
                     hostInfo.append("\nhost.versionName=" + versionName)
+                    hostInfo.append("\nhost.buildType=" + buildTypeName)
+                    hostInfo.append("\nhost.flavorName=" + flavorName)
 
                     def packageName = android.defaultConfig.applicationId
                     if (android.buildTypes[buildTypeName].applicationIdSuffix != null) {
@@ -143,13 +189,35 @@ afterEvaluate {
 
             //实际上最新版sdk和gradle可以直接指定apk了, 不需要.ap_文件
             def processResourcesTask = baseVariant.getProcessResources();
-            def processResFullName = baseVariant.apkData.fullName
+            //def processResFullName = baseVariant.apkData.fullName
             processResourcesTask.doLast {
                 copy {
                     println '编译宿主资源编译完成后导出后缀为.ap_的资源包，此资源包在编译非独立插件时需要此包'
-                    from processResourcesTask.resPackageOutputFolder
-                    into("${project.buildDir}/outputs/")
-                    rename("-${processResFullName}", "")
+
+                    //println com.android.builder.Version.ANDROID_GRADLE_PLUGIN_VERSION
+                    //Android Gradle Plugin Version 3.x
+                    if (!AndroidGradlePluginVersion.startsWith("Android Gradle 2")) {
+                        println processResourcesTask.resPackageOutputFolder
+                        from processResourcesTask.resPackageOutputFolder
+                        into("${project.buildDir}/outputs/")
+                        rename(new Transformer<String, String>() {
+                            @Override
+                            String transform(String s) {
+                                return "resources.ap_"
+                            }
+                        })
+                    } else {
+                        //Android Gradle Plugin Version 2.x
+                        println processResourcesTask.packageOutputFile
+                        from processResourcesTask.packageOutputFile
+                        into("${project.buildDir}/outputs/")
+                        rename(new Transformer<String, String>() {
+                            @Override
+                            String transform(String s) {
+                                return "resources.ap_"
+                            }
+                        })
+                    }
                 }
             }
         }
@@ -180,15 +248,36 @@ afterEvaluate {
                     jarMerger.addJar(jarPath);
                     //jarMerger.addFolder(directoryInput.getFile());
                 }
-                File classes = new File(buildDir, 'intermediates/classes-jar/' + (flavorName.equals("")?"":(flavorName + "/")) + buildTypeName + "/classes.jar");
+
+                String buildClassesTaskName1 = "jar" + varName.capitalize() +  "Classes";
+                String classesPath1 = 'intermediates/packaged/' + (flavorName.equals("")?"":(flavorName + "/")) + buildTypeName + "/classes.jar";
+
+                String buildClassesTaskName2 = "bundleAppClasses" + varName.capitalize();
+                String classesPath2 = 'intermediates/classes-jar/' + (flavorName.equals("")?"":(flavorName + "/")) + buildTypeName + "/classes.jar"
+
+                def buildClassesTaskName;
+                def classesPath;
+
+                if (tasks.findByName(buildClassesTaskName1)) {
+                    buildClassesTaskName = buildClassesTaskName1;
+                    classesPath = classesPath1;
+                } else if (tasks.findByName(buildClassesTaskName2)) {
+                    buildClassesTaskName = buildClassesTaskName2;
+                    classesPath = classesPath2;
+                } else {
+                    throw new IllegalAccessError("未找到打包宿主classes的task，请检查android gradle 插件版本")
+                }
+
+                File classes = new File(buildDir, classesPath);
 
                 println "classes path is " + classes.absolutePath
+                println "buildClassesTaskName is " + buildClassesTaskName
 
                 if (!classes.exists()) {
                     try {
-                        tasks.getByName("bundleAppClasses" + varName.capitalize()).execute()
+                        tasks.getByName(buildClassesTaskName).execute()
                     } catch(Exception e) {
-                        println "fail to create jar for task " + javaCompile.name + " " + "bundleAppClasses" + varName.capitalize()
+                        println "fail to create jar for task " + javaCompile.name + " " + buildClassesTaskName
                     }
                 } else {
                     println "classes path already exists： " + classes.absolutePath
@@ -196,8 +285,6 @@ afterEvaluate {
                 if (classes.exists()) {
                     jarMerger.addJar(classes)
                 }
-            } catch (Exception e) {
-                e.printStackTrace()
             } finally {
                 jarMerger.close()
             }
@@ -225,12 +312,24 @@ afterEvaluate {
                     if (file.absolutePath.contains(keyword) && file.absolutePath.endsWith(buildTypeName)) {
 
                         isFind = true;
-                        println "导出混淆后的宿主jar包" + "${project.buildDir}/outputs/" + "host_" + varName + "_obfuscated" + ".jar"
+                        def sourceHostObfuscatedJar
+                        if (new File(file.absolutePath + "/0.jar").exists()) {
+                            sourceHostObfuscatedJar = file.absolutePath + "/0.jar"
+                        } else if (new File(file.absolutePath + "/jars/3/1f/main.jar").exists()) {
+                            sourceHostObfuscatedJar = file.absolutePath + "/jars/3/1f/main.jar"
+                        }
+                        def hostObfuscatedJar = "host_obfuscated.jar"
+                        println "导出混淆后的宿主jar " + sourceHostObfuscatedJar + " 包到 " + "${project.buildDir}/outputs/" + hostObfuscatedJar
 
                         copy {
-                            from file.absolutePath + "/0.jar"
+                            from sourceHostObfuscatedJar
                             into("${project.buildDir}/outputs/")
-                            rename('0', "host_" + varName + "_obfuscated")
+                            rename(new Transformer<String, String>() {
+                                @Override
+                                String transform(String s) {
+                                    return hostObfuscatedJar
+                                }
+                            })
                         }
                     }
                 }
@@ -478,6 +577,8 @@ public class ThemeProcessor extends DefaultHandler {
 
                     //} else if (text.startsWith("?attr")) {
                     //    text = text.replace("?attr", "?*" + packageName +":attr");
+                } else if (text.startsWith("@mipmap")) {
+                    text = text.replace("@mipmap", "@*" + packageName +":mipmap");
                 }
 
                 outXmlStream.write(text);

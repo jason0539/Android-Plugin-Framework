@@ -5,10 +5,6 @@ README: [中文](https://github.com/limpoxe/Android-Plugin-Framework/blob/master
 Android-Plugin-Framework是一个Android插件化框架，用于通过动态加载的方式免安装运行插件apk
 
 #### 最新版本: 0.0.63-snapshot
-              此版本需要com.android.tools.build:gradle:3.0.0和gradle-4.1
-              若gradle插件低于此版本请将框架版本和脚本版本都切为0.0.58-snapshot：
-              宿主：apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.58-snapshot/FairyPlugin/host.gradle"
-              插件：apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.58-snapshot/FairyPlugin/plugin.gradle"
               重要：需要在根目录的gradle.properties文件中配置android.enableAapt2=false
                
 #### 项目结构
@@ -72,7 +68,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 
 2、 在宿主工程的build.gradle文件下添加如下3个配置
 ```
-    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.63-snapshot/FairyPlugin/host.gradle"        
+    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/host.gradle"        
 
     android {
         defaultConfig {
@@ -160,7 +156,7 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
             
 2、在build.gradle中添加如下2个配置
 ```
-    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/0.0.63-snapshot/FairyPlugin/plugin.gradle"
+    apply from: "https://raw.githubusercontent.com/limpoxe/Android-Plugin-Framework/master/FairyPlugin/plugin.gradle"
 
     android {
         defaultConfig {
@@ -202,15 +198,27 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
            原因很简单，既然是非独立插件，肯定是需要引用宿主的类和资源的。所以编译非独立插件时会用到编译宿主时的输出物
 
         3、由于宿主和插件在同一个工程中，点击assembleDebug时编译顺序不可控，会导致每次clean后，首次assembleDebug会失败，此时重新编译即可
-   
-        所以如果使用其他编译方法，请务必仔细阅读build.gradle，了解编译过程和依赖关系后可以自行调整编译脚本，否则可能会失败。
+           可能需要执行3次assembleDebug，
+               第一次是编译宿主，产生bar文件，
+               第二次是依赖bar编译插件，产生插件文件
+               第三次是重新编译宿主，将插件文件内置到宿主assets中
+            所以如果使用其他编译方法，请务必仔细阅读build.gradle，了解编译过程和依赖关系后可以自行调整编译脚本，否则可能会失败。
 
-	3、Demo中使用了arm平台的so，若在x86平台上测试Demo可能会有so异常，请自行适配so。
+	    4、Demo中使用了arm平台的so，若在x86平台上测试Demo可能会有so异常，请自行适配so。
 	
-   待插件编译完成后，插件的编译脚本会自动将插件demo的apk复制到PlugiMain/assets目录下（复制脚本参看插件工程的build.gradle）,然后重新
-   打包安装PluginMain。
-   或者也可将插件apk复制到sdcard，然后在宿主程序中调用PluginManagerHelper.installPlugin("插件apk绝对路径")进行安装。
+   待插件编译完成后，即可通过宿主在运行时下载插件apk或者将插件apk复制到sdcard调用PluginManagerHelper.installPlugin("插件apk绝对路径")进行插件安装。
 
+   通常插件会内置一个版本到宿主中随宿主一起发布，则需要将插件配置到宿主的assets目录下，再编译一次宿主（即上述3中的第三次编译）。
+   配置方法如下：
+
+        dependencies {
+            //支持坐标依赖
+            //innerPlugin 'xxx:xxx:xxx@apk'
+            innerPlugin '/xx/xx/xx/xx.apk'
+        }
+
+
+   增加这个配置以后，宿主在打包时会将这个依赖的插件apk打包到宿主的assets目录中
         
 # 其他指南
 1. 如何使非独立插件依赖其他插件
@@ -295,14 +303,14 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
         若想获得所在宿主的Activity对象，需要使用((PluginContextTheme)View.getContext()).getOuter()获取，
         或者通过View.getParent.getContext()来获取， getParent的目的是拿到宿主控件。
                                     
-7. 如何在插件使用宿主中定义的主题
+###7. 如何在插件使用宿主中定义的主题
 
         插件中可以直接使用宿主中定义的主题。
         例如，宿主中定义了一个主题为AppHostTheme，那么插件的Manifest文件中可直接使用android:theme="@style/AppHostTheme"来使用宿主主题
         如果插件要扩展宿主主题，也可以直接使用。例如，在插件的style.xml中定义一个主题PluginTheme：<style name="PluginTheme" parent="AppHostTheme" />
         以上写法，IDE中可能会标红，但是不影响编译和运行。
             
-8. 如何在插件使用宿主中定义的其他资源
+###8. 如何在插件使用宿主中定义的其他资源
 
    分为在代码中和在资源文件中两种。代码中直接通过R即可使用。资源中，插件中可以直接使用宿主中定义的资源，但是写法和直接使用插件自己的资源略有不同,
    通常应写为：
@@ -436,15 +444,20 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
         
         //添加Provider桥接
         //Provider桥接的写法稍有不同
-        //1、将从插件Manifest复制过来的provider配置中的name都改为固定值：com.limpoxe.fairy.core.bridge.ProviderClientProxy
+        //1、将从插件Manifest复制过来的provider配置中的name都改为：com.limpoxe.fairy.core.bridge.ProviderClientProxy的子类
         //2、不需要添加STUB_EXACT的intent-filter
         //例如，将插件中定义的一个provider的authorities添加到宿主，使其支持外部应用直接访问：
         <provider
-            android:name="com.limpoxe.fairy.core.bridge.ProviderClientProxy"
+            android:name="com.limpoxe.fairy.core.bridge.ProviderClientProxy$Stub0"
             android:authorities="a.b.c.fileprovider"
             android:grantUriPermissions="true"
             android:exported="false">
         </provider>
+        
+        有多个时不能重复，可使用
+            com.limpoxe.fairy.core.bridge.ProviderClientProxy$Stub0
+            com.limpoxe.fairy.core.bridge.ProviderClientProxy$Stub1
+        等等。
         
        可以参考demo        
 
@@ -486,9 +499,15 @@ Android-Plugin-Framework是一个Android插件化框架，用于通过动态加�
 
     4、需要在android studio中关闭instantRun选项。因为instantRun会替换apk的application配置导致框架异常
  
-    5、本项目除master分支外，其他分支不会更新维护。
+    5、对非独立插件而言，在宿主中定义的所有主题，在非独立插件中都可以直接使用
+       不要在非独立插件中定义和宿主中相同的主题名称，否则会报各种重复定义的错误（其他资源可以同名重复，例如color、drawable）
+       最常见的错误，例如新建一个宿主工程后，studio会默认创建一个AppTheme主题，
+       再新建一个非独立插件工程，studio也会默认创建一个AppTheme主题，此时插件中编译就会报重复定义错误，
+       因为非独立插件已经包含了所有宿主中定义的主题， 此时只需要删除调插件中的AppTheme主题即可
+ 
+    6、本项目除master分支外，其他分支不会更新维护。
     
-    6、如果是非独立插件, 需要先编译宿主, 再编译插件, 
+    7、如果是非独立插件, 需要先编译宿主, 再编译插件, 
        如果是非独立插件, 需要先编译宿主, 再编译插件
        如果是非独立插件, 需要先编译宿主, 再编译插件
        

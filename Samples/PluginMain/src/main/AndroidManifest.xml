@@ -63,6 +63,7 @@
         android:name=".MyApplication"
         android:icon="@mipmap/cust_ic_launcher"
         android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/ShareTheme" >
 
         <meta-data android:value="591d0ae61061d23ca5000dbf" android:name="UMENG_APPKEY"/>
@@ -160,7 +161,7 @@
         <!--Demo config for plugin AdMob end -->
 
         <provider
-            android:name="com.limpoxe.fairy.core.bridge.ProviderClientProxy"
+            android:name="com.limpoxe.fairy.core.bridge.ProviderClientProxy$Stub0"
             android:authorities="a.b.c.fileprovider"
             android:grantUriPermissions="true"
             android:exported="false">

@@ -33,8 +33,39 @@ configurations {
 def host_patch_path = ""
 //基线包解压路径
 def host_patch_extract_dir = project.buildDir.absolutePath + '/outputs/baselinePatch'
+def hostClassesJar = host_patch_extract_dir + "/host_classes.jar"
+
 //基线包文件名
 def host_patch_fileName = "host.bar"
+
+
+def ApplicationPlugin = getPlugins().findPlugin("com.android.application")
+def LibraryPlugin = getPlugins().findPlugin("com.android.library")
+def isApplicationModule
+def AndroidGradlePluginVersion
+if (ApplicationPlugin != null) {
+    isApplicationModule = true;
+    AndroidGradlePluginVersion = ApplicationPlugin.androidBuilder.createdBy
+} else {
+    isApplicationModule = false;
+    AndroidGradlePluginVersion = LibraryPlugin.androidBuilder.createdBy
+}
+def fairyMinifyEnabled = false
+
+android{
+}
+
+dependencies {
+
+    if (AndroidGradlePluginVersion.startsWith("Android Gradle 2")) {
+        if (!fairyMinifyEnabled) {
+            provided files(hostClassesJar)
+        } else {
+            compile files(hostClassesJar)
+        }
+    }
+
+}
 
 //第一件事 将宿主资源添加到编译时，仅参与编译，不参与打包
 android.aaptOptions.additionalParameters('-I', host_patch_extract_dir + "/" + host_patch_fileName)
@@ -42,9 +73,10 @@ android.aaptOptions.additionalParameters('-I', host_patch_extract_dir + "/" + ho
 HashMap<String, SortedMap<String, ArrayList<String>>> declareStyleMap = new HashMap<String, SortedMap<String, ArrayList<String>>>();
 
 afterEvaluate {
-
-    if (android.defaultConfig.applicationId == null) {
-        throw new Exception("插件build.gradle未配置android.defaultConfig.applicationId")
+    if (isApplicationModule) {
+        if (android.defaultConfig.applicationId == null) {
+            throw new Exception("插件build.gradle未配置android.defaultConfig.applicationId")
+        }
     }
 
     configurations.each { config ->
@@ -55,31 +87,33 @@ afterEvaluate {
                 host_patch_path = patch.absolutePath;
                 println project.name + "发现宿主基线配置指向位置：" + host_patch_path
 
-                //读取混淆开关配置
-                def fairyMinifyEnabled = false;
-                gradle.startParameter.taskNames.each { startTaskName ->
-                    if (startTaskName.startsWith("assemble")) {
-                        if (startTaskName.contains("Debug")) {
-                            fairyMinifyEnabled = android.buildTypes.debug.minifyEnabled
-                        } else if (startTaskName.contains("Release")) {
-                            fairyMinifyEnabled = android.buildTypes.release.minifyEnabled
+                if (!AndroidGradlePluginVersion.startsWith("Android Gradle 2")) {
+
+                    //读取混淆开关配置
+                    gradle.startParameter.taskNames.each { startTaskName ->
+                        if (startTaskName.startsWith("assemble")) {
+                            if (startTaskName.contains("Debug")) {
+                                fairyMinifyEnabled = android.buildTypes.debug.minifyEnabled
+                            } else if (startTaskName.contains("Release")) {
+                                fairyMinifyEnabled = android.buildTypes.release.minifyEnabled
+                            }
                         }
                     }
-                }
 
-                //根据混淆开关来选择是使用compileOnly还是implementation来依赖基线包的jar
-                String hostClasses = host_patch_extract_dir + "/host_classes.jar"
-                println project.name + "添加宿主基线jar依赖：" + hostClasses + "\n混淆开关：minifyEnabled=" + fairyMinifyEnabled
-                if (!fairyMinifyEnabled) {
-                    configurations.compileOnly.dependencies.add(project.dependencies.create(files(hostClasses)))
-                } else {
-                    configurations.implementation.dependencies.add(project.dependencies.create(files(hostClasses)))
+                    //根据混淆开关来选择是使用compileOnly还是implementation来依赖基线包的jar
+                    println project.name + "添加宿主基线jar依赖：" + hostClassesJar + "\n混淆开关：minifyEnabled=" + fairyMinifyEnabled
+                    if (!fairyMinifyEnabled) {
+                        configurations.compileOnly.dependencies.add(project.dependencies.create(files(hostClassesJar)))
+                    } else {
+                        configurations.implementation.dependencies.add(project.dependencies.create(files(hostClassesJar)))
+                    }
                 }
             }
         }
     }
 
-    for (variant in android.applicationVariants) {
+    def moduleVariants = isApplicationModule?android.applicationVariants:android.libraryVariants
+    for (variant in moduleVariants) {
 
         def varName = variant.name;
         def buildTypeName = variant.buildType.name
@@ -88,33 +122,53 @@ afterEvaluate {
 
         println 'Check Env : ' + varName +  " " + buildTypeName + " " + flavorName + " " + varDirName
 
+        def generateDebugSourcesTask = tasks.findByName("generate${varName.capitalize()}Resources")
+        if (generateDebugSourcesTask) {
+            generateDebugSourcesTask.setOnlyIf { true }
+            generateDebugSourcesTask.outputs.upToDateWhen { false }
+            generateDebugSourcesTask.doFirst {
+
+                println "检查宿主基线patch文件：" + host_patch_path
+
+                if (!file(host_patch_path).exists()) {
+                    file(host_patch_extract_dir).deleteDir();
+                    throw new FileNotFoundException("宿主基线patch文件不存在! 请宿主编译完成后，再编译插件，并检查插件编译脚本的baselinePatch依赖配置是否正确: \n", host_patch_path)
+                }
+                copy {
+                    println "正在解压宿主基线patch文件：" + host_patch_path
+                    def zipFile = file(host_patch_path);//host.bar
+                    def outputDir = file(host_patch_extract_dir)//outputs/baselinePatch
+                    outputDir.deleteDir();
+                    from zipTree(zipFile)
+                    from(zipFile) {
+                        rename {
+                            host_patch_fileName
+                        }
+                    }
+                    into outputDir
+                }
+            }
+        }
+
         def mergeResourceTask = tasks.findByName("merge${varName.capitalize()}Resources");
         mergeResourceTask.setOnlyIf { true }
         mergeResourceTask.outputs.upToDateWhen { false }
         mergeResourceTask.doLast {
 
             println "开始merge插件工程资源：" + host_patch_path
+
             if (!file(host_patch_path).exists()) {
                 file(host_patch_extract_dir).deleteDir();
                 throw new FileNotFoundException("宿主基线patch文件不存在! 请宿主编译完成后，再编译插件，并检查插件编译脚本的baselinePatch依赖配置是否正确: \n", host_patch_path)
             }
 
-            copy {
-                println "正在解压宿主基线patch文件：" + host_patch_path
-                def zipFile = file(host_patch_path);//host.bar
-                def outputDir = file(host_patch_extract_dir)//outputs/baselinePatch
-                outputDir.deleteDir();
-                from zipTree(zipFile)
-                from(zipFile) {
-                    rename {
-                        host_patch_fileName
-                    }
-                }
-                into outputDir
-            }
+            File propFile = file(host_patch_extract_dir + "/HostInfo.prop");
+            def Properties props = new Properties()
+            props.load(new FileInputStream(propFile))
+            def hostBuildType = props.getProperty("host.buildType")
 
             //第二件事
-            applyThemePatch(buildTypeName, host_patch_extract_dir);
+            applyThemePatch(hostBuildType, buildTypeName, host_patch_extract_dir);
 
             //第三件事<一>
             File originVaules = new File(project.buildDir, "intermediates/res/merged/" + buildTypeName + "/values/values.xml");
@@ -151,6 +205,8 @@ afterEvaluate {
                     }
                 }
                 )
+            } else {
+                println "没有需要处理的DeclareStyle资源"
             }
         }
 
@@ -173,6 +229,7 @@ afterEvaluate {
                     BufferedWriter bw = new BufferedWriter(new FileWriter(newR));
                     String srcLine = null;
                     boolean hasStyleable = false;
+                    String packageStr = "";
                     while((srcLine = br.readLine()) != null) {
                         if (srcLine.equals("public final class R {")) {
                             bw.writeLine(srcLine);
@@ -180,12 +237,16 @@ afterEvaluate {
                             bw.writeLine("  public static final class styleable {");
                             Iterator<Map.Entry<String, ArrayList<String>>> itr = map.iterator();
                             while(itr.hasNext()) {
+
                                 Map.Entry<String, ArrayList<String>> item = itr.next();
                                 String key = item.key;
                                 StringBuilder sb = new StringBuilder();
+
+                                println "Generate styleable " + key
+
                                 for(int i = 0; i < item.value.size(); i++) {
                                     bw.writeLine("      public static int " + key + "_" + item.value.get(i) + "=" + i + ";");
-                                    sb.append(android.defaultConfig.applicationId).append(".R.attr.").append(item.value.get(i)).append(",")
+                                    sb.append(packageStr).append(".R.attr.").append(item.value.get(i)).append(",")
                                 }
                                 if (sb.length() > 0) {
                                     sb.deleteCharAt(sb.length()-1)
@@ -198,6 +259,13 @@ afterEvaluate {
                         } else if (hasStyleable && srcLine.trim().equals("}")) {
                             hasStyleable = false;
                         } else {
+                            if (srcLine.startsWith("package ") && srcLine.endsWith(";")) {
+                                if(isApplicationModule) {
+                                    packageStr = android.defaultConfig.applicationId
+                                } else {
+                                    packageStr = srcLine.replace("package ", "").replace(";", "");
+                                }
+                            }
                             bw.writeLine(srcLine);
                         }
                     }
@@ -206,110 +274,136 @@ afterEvaluate {
 
                     originR.delete()
                     newR.renameTo(originR)
+                } else {
+                    println "Nothing to Fix for " + originR.absolutePath
                 }
             }
         }
 
-        for (baseVariant in variant.outputs) {
+        if (isApplicationModule) {
+            for (baseVariant in variant.outputs) {
 
-            baseVariant.processResources.doFirst {
-                println "开始处理插件工程资源.."
-                if (!new File(host_patch_path).exists()) {
-                    throw new FileNotFoundException("宿主基线patch文件不存在! 请宿主编译完成后，再编译插件，并检查插件编译脚本的baselinePatch依赖配置是否正确: \n", host_patch_path)
-                }
-                if (!file(host_patch_extract_dir).exists()) {
-                    throw new FileNotFoundException("宿主基线patch文件不存在! 请宿主编译完成后，再编译插件，并检查插件编译脚本的baselinePatch依赖配置是否正确: \n", host_patch_extract_dir)
-                }
-            }
-
-            baseVariant.processManifest.doLast {
-                File propFile = file(host_patch_extract_dir + "/HostInfo.prop");
-                def hostVersionName = null
-                def hostVersionCode = null
-                def hostApplicationId = null
-                if (propFile.exists()) {
-                    def Properties props = new Properties()
-                    props.load(new FileInputStream(propFile))
-                    hostVersionName = props.getProperty("host.versionName")
-                    hostVersionCode = props.getProperty("host.versionCode")
-                    hostApplicationId = props.getProperty("host.applicationId")
-                    println "宿主基线包信息：hostVersionName=" + hostVersionName + " hostVersionCode=" + hostVersionCode + " hostApplicationId=" + hostApplicationId
-                } else {
-                    throw new Exception("HostInfo.prop文件丢失，请检查此路径：" + propFile.absolutePath)
-                }
-                if (hostVersionName != null && hostApplicationId != null && hostVersionCode != null) {
-                    println "插件Manifest文件中插入宿主版本号标识 requiredHostVersionName=" + hostVersionName
-                    println "插件Manifest文件中插入非独立插件标识 requiredHostApplicationId=" + hostApplicationId
-                    File manifestFile = new File("$manifestOutputDirectory/AndroidManifest.xml")
-                    println "插件Manifest：" + manifestFile.absolutePath
-                    def originManifestContent = manifestFile.getText('UTF-8')
-                    def modifyedManifestContent = originManifestContent.replace("<manifest ", "<manifest requiredHostVersionName=\""
-                            + hostVersionName + "\" requiredHostVersionCode=\"" + hostVersionCode
-                            + "\" hostApplicationId=\"" + hostApplicationId + "\" ");
-                    manifestFile.write(modifyedManifestContent, 'UTF-8')
-                } else {
-                    throw new Exception("HostInfo.prop文件信息不全，请检查此文件内容：" + propFile.absolutePath)
-                }
-            }
-        }
-
-        //处理混淆，这里保存混淆以后dex之前的jar包作为基线包备用
-        def proguardTask = project.tasks.findByName("transformClassesAndResourcesWithProguardFor${varName.capitalize()}")
-
-        if (proguardTask) {
-            proguardTask.doFirst {
-                println "开始混淆任务 " + varName.capitalize()
-                def baselineMappingFile = host_patch_extract_dir + "/mapping/" + varName + "/mapping.txt";
-                println "应用基线mapping文件： " + baselineMappingFile
-                if (!file(baselineMappingFile).exists()) {
-                    throw "baselineMappingFile is Not Found : " + baselineMappingFile
-                }
-                getTransform().applyMapping(file(baselineMappingFile));
-            }
-            proguardTask.doLast {
-
-                println "混淆完成 " + varName.capitalize()
-
-                def host_obfuscated_jar = host_patch_extract_dir + "/host_" + varName + "_obfuscated.jar"
-                if (!new File(host_obfuscated_jar).exists()) {
-                    project.logger.error "宿主基线混淆包不存在 " + host_obfuscated_jar
-                    throw new Exception("宿主基线混淆包不存在 " + host_obfuscated_jar + "， 请检查宿主编译产物中是否包含此文件")
-                }
-                println "依赖的宿主基线混淆包jar路径为：" + host_obfuscated_jar
-
-                boolean isFind = false;
-                proguardTask.outputs.files.files.each { File file->
-                    //http://blog.csdn.net/sbsujjbcy/article/details/50839263
-                    //build/intermediates/transforms/proguard/anzhi/release/jars/3/1f/main.jar
-                    //最新版本路径已发生变化；2017-11-12
-                    println "file outputs=>${file.absolutePath}"
-                    String keyword = File.separator + "transforms" + File.separator + "proguard" + File.separator;
-                    println "contains keyword " + keyword + " " + String.valueOf(file.absolutePath.contains(keyword)) + ", endsWith buildType " + buildTypeName + " " + String.valueOf(file.absolutePath.endsWith(buildTypeName))
-                    if (file.absolutePath.contains(keyword) && file.absolutePath.endsWith(buildTypeName)) {
-                        isFind = true;
-                        //保留一个备份
-                        println "导出混淆后的插件jar包 "
-                        println "From " + file.absolutePath + "/0.jar" //此文件是proguard任务的固定输出目录，最新版文件名即是0.jar, 旧版叫main.jar
-                        println "To " + "${project.buildDir}/outputs/" + "plugin_" + varName + "_obfuscated.jar"
-                        copy {
-                            from file.absolutePath + "/0.jar"
-                            into("${project.buildDir}/outputs/")
-                            rename('0', "plugin_" + varName + "_obfuscated")
-                        }
-
-                        diffJar(file.absolutePath + "/0.jar", host_obfuscated_jar, "plugin_" + varName + "_obfuscated");
+                baseVariant.processResources.doFirst {
+                    println "开始处理插件工程资源.."
+                    if (!new File(host_patch_path).exists()) {
+                        throw new FileNotFoundException("宿主基线patch文件不存在! 请宿主编译完成后，再编译插件，并检查插件编译脚本的baselinePatch依赖配置是否正确: \n", host_patch_path)
+                    }
+                    if (!file(host_patch_extract_dir).exists()) {
+                        throw new FileNotFoundException("宿主基线patch文件不存在! 请宿主编译完成后，再编译插件，并检查插件编译脚本的baselinePatch依赖配置是否正确: \n", host_patch_extract_dir)
                     }
                 }
-                if (!isFind) {
-                    throw "obfuscated jar file not found, please check."
-                }
 
+                baseVariant.processManifest.doLast {
+                    File propFile = file(host_patch_extract_dir + "/HostInfo.prop");
+                    def hostVersionName = null
+                    def hostVersionCode = null
+                    def hostApplicationId = null
+                    def hostBuildType = null
+                    def hostFlavorName = null
+                    if (propFile.exists()) {
+                        def Properties props = new Properties()
+                        props.load(new FileInputStream(propFile))
+                        hostVersionName = props.getProperty("host.versionName")
+                        hostVersionCode = props.getProperty("host.versionCode")
+                        hostBuildType = props.getProperty("host.buildType")
+                        hostFlavorName = props.getProperty("host.flavorName")
+                        hostApplicationId = props.getProperty("host.applicationId")
+
+                        println "宿主基线包信息：hostVersionName=" + hostVersionName + " hostVersionCode=" + hostVersionCode + " hostApplicationId=" + hostApplicationId + " hostBuildType=" + hostBuildType + " hostFlavorName=" + hostFlavorName
+
+                    } else {
+                        throw new Exception("HostInfo.prop文件丢失，请检查此路径：" + propFile.absolutePath)
+                    }
+                    if (hostVersionName != null && hostApplicationId != null && hostVersionCode != null) {
+                        println "插件Manifest文件中插入宿主版本号标识 requiredHostVersionName=" + hostVersionName
+                        println "插件Manifest文件中插入非独立插件标识 requiredHostApplicationId=" + hostApplicationId
+                        def manifestFile
+                        if (AndroidGradlePluginVersion.startsWith("Android Gradle 2")) {
+                            manifestFile = new File(properties.get("manifestOutputFile").absolutePath)
+                        } else {
+                            manifestFile = new File("$manifestOutputDirectory/AndroidManifest.xml")
+                        }
+                        println "插件Manifest：" + manifestFile.absolutePath
+                        def originManifestContent = manifestFile.getText('UTF-8')
+                        def modifyedManifestContent = originManifestContent.replace("<manifest ", "<manifest requiredHostVersionName=\""
+                                + hostVersionName + "\" requiredHostVersionCode=\"" + hostVersionCode
+                                + "\" hostApplicationId=\"" + hostApplicationId + "\" ");
+                        manifestFile.write(modifyedManifestContent, 'UTF-8')
+                    } else {
+                        throw new Exception("HostInfo.prop文件信息不全，请检查此文件内容：" + propFile.absolutePath)
+                    }
+                }
+            }
+
+            //处理混淆，这里保存混淆以后dex之前的jar包作为基线包备用
+            def proguardTask = project.tasks.findByName("transformClassesAndResourcesWithProguardFor${varName.capitalize()}")
+
+            if (proguardTask) {
+                proguardTask.doFirst {
+                    println "开始混淆任务 " + varName.capitalize()
+                    def baselineMappingFile = host_patch_extract_dir + "/mapping/" + varName + "/mapping.txt";
+                    println "应用基线mapping文件： " + baselineMappingFile
+                    if (!file(baselineMappingFile).exists()) {
+                        throw "baselineMappingFile is Not Found : " + baselineMappingFile
+                    }
+                    getTransform().applyMapping(file(baselineMappingFile));
+                }
+                proguardTask.doLast {
+
+                    println "混淆完成 " + varName.capitalize()
+
+                    def host_obfuscated_jar = host_patch_extract_dir + "/host_obfuscated.jar"
+                    if (!new File(host_obfuscated_jar).exists()) {
+                        project.logger.error "宿主基线混淆包不存在 " + host_obfuscated_jar
+                        throw new Exception("宿主基线混淆包不存在 " + host_obfuscated_jar + "， 请检查宿主编译产物中是否包含此文件")
+                    }
+                    println "依赖的宿主基线混淆包jar路径为：" + host_obfuscated_jar
+
+                    boolean isFind = false;
+                    proguardTask.outputs.files.files.each { File file->
+                        //http://blog.csdn.net/sbsujjbcy/article/details/50839263
+                        //build/intermediates/transforms/proguard/anzhi/release/jars/3/1f/main.jar
+                        //最新版本路径已发生变化；2017-11-12
+                        println "file outputs=>${file.absolutePath}"
+                        String keyword = File.separator + "transforms" + File.separator + "proguard" + File.separator;
+                        println "contains keyword " + keyword + " " + String.valueOf(file.absolutePath.contains(keyword)) + ", endsWith buildType " + buildTypeName + " " + String.valueOf(file.absolutePath.endsWith(buildTypeName))
+                        if (file.absolutePath.contains(keyword) && file.absolutePath.endsWith(buildTypeName)) {
+                            isFind = true;
+                            def pluginObfuscatedJar = "plugin_obfuscated.jar"
+                            def sourcePluginObfuscatedJar
+                            if (new File(file.absolutePath + "/0.jar").exists()) {
+                                sourcePluginObfuscatedJar = file.absolutePath + "/0.jar"
+                            } else if (new File(file.absolutePath + "/jars/3/1f/main.jar").exists()) {
+                                sourcePluginObfuscatedJar = file.absolutePath + "/jars/3/1f/main.jar"
+                            }
+                            //保留一个备份
+                            println "导出混淆后的插件jar包 "
+                            println "From " + sourcePluginObfuscatedJar //此文件是proguard任务的固定输出目录，最新版文件名即是0.jar, 旧版叫main.jar
+                            println "To " + "${project.buildDir}/outputs/" + pluginObfuscatedJar
+                            copy {
+                                from sourcePluginObfuscatedJar
+                                into("${project.buildDir}/outputs/")
+                                rename(new Transformer<String, String>() {
+                                    @Override
+                                    String transform(String s) {
+                                        return pluginObfuscatedJar
+                                    }
+                                })
+                            }
+
+                            diffJar(sourcePluginObfuscatedJar, host_obfuscated_jar);
+                        }
+                    }
+                    if (!isFind) {
+                        throw "obfuscated jar file not found, please check."
+                    }
+                }
             }
         }
     }
 }
 
-def diffJar(String plugin, String host, String name) {
+def diffJar(String plugin, String host) {
 
 
     println "通过基线混淆包和插件混淆包做diff清理重复的class"
@@ -332,10 +426,15 @@ def diffJar(String plugin, String host, String name) {
     copy {
         println "备份diff后重新生成的插件的源包到插件out目录"
         println "From " + plugin
-        println "To " + "${project.buildDir}/outputs/" + name + "_after_diff.jar"
+        println "To " + "${project.buildDir}/outputs/plugin_obfuscated_after_diff.jar"
         from plugin
         into("${project.buildDir}/outputs/")
-        rename("0", name + "_after_diff")
+        rename(new Transformer<String, String>() {
+            @Override
+            String transform(String s) {
+                return "plugin_obfuscated_after_diff.jar"
+            }
+        })
     }
 }
 
@@ -525,16 +624,24 @@ public class ZipUtil {
     }
 }
 
-def applyThemePatch(buildTypeName, hostPatchExtractDir) {
+def applyThemePatch(hostBuildType, buildTypeName, hostPatchExtractDir) {
 
-    def fromDir = hostPatchExtractDir + "/theme_patch/" + buildTypeName;
+    def fromDir = hostPatchExtractDir + "/theme_patch/" + hostBuildType;
     def resourceDir = project.buildDir.absolutePath + "/intermediates/res/merged/" + buildTypeName;
+
+    if (!file(fromDir).exists()) {
+        throw new FileNotFoundException("Dir Not Found: " + fromDir);
+    }
+
+    if (!file(resourceDir).exists()) {
+        throw new FileNotFoundException("Dir Not Found: " + resourceDir);
+    }
 
     FileTree allxmlFiles = fileTree(dir: fromDir)
     allxmlFiles.include '*.xml'
 
     if (allxmlFiles.size() == 0) {
-        println "theme_patch目录未生成，请先编译宿主！！"
+        println fromDir + " 目录未生成，请先编译宿主！！"
         throw new FileNotFoundException("theme_patch目录未生成，请先编译宿主！！\n请检查这个目录：\n" + fromDir);
     }
 
@@ -547,7 +654,7 @@ def applyThemePatch(buildTypeName, hostPatchExtractDir) {
             dest = resourceDir +  '/' + itemFile.name.replace('patch_', '').replace('.xml', '')  + "/"
         }
 
-        println "apply from " + itemFile + " to " + dest
+        println "apply theme_patch from " + itemFile + " to " + dest
         copy {
             from(fromDir) {
                 include itemFile.name

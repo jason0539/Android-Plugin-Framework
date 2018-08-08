@@ -2,6 +2,7 @@ package com.example.plugintest.activity;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.ActivityManager;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
@@ -27,6 +28,7 @@ import android.support.v4.content.FileProvider;
 import android.support.v7.app.ActionBar;
 import android.telephony.CellInfo;
 import android.telephony.TelephonyManager;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -37,6 +39,7 @@ import android.widget.Button;
 import android.widget.PopupWindow;
 import android.widget.Toast;
 
+import com.example.pluginmain.MessageEvent;
 import com.example.pluginsharelib.BaseActivity;
 import com.example.pluginsharelib.IHostAidlInterface;
 import com.example.pluginsharelib.SharePOJO;
@@ -50,6 +53,10 @@ import com.limpoxe.fairy.core.android.HackActivity;
 import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.LogUtil;
 //import com.umeng.analytics.MobclickAgent;
+
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -98,6 +105,7 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
     @Override
 	public void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
+		EventBus.getDefault().register(this);
         //测试databinding
 		//PluginLauncherBinding bing =  DataBindingUtil.setContentView(this, R.layout.plugin_launcher);
 		//DataBindingTestVO dataBindingTestVO = new DataBindingTestVO("DataBind:打开PluginHellWorld");
@@ -550,6 +558,22 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 		intent.putExtra("testParam", "testParam");
 		startService(intent);
 		//stopService(intent);
+
+        //注意Eventbus不能跨进程，要在宿主和插件之间测试EventBus需要使宿主插件在同一个进程
+        EventBus.getDefault().post(new MessageEvent("onClickPluginTestService2_click"));
+
+		String topActivity = topActivity(this);
+		LogUtil.d("topActivity", topActivity);
+	}
+
+	private static String topActivity(Context context) {
+		ActivityManager am = (ActivityManager) context.getSystemService(Context.ACTIVITY_SERVICE);
+		List<ActivityManager.RunningTaskInfo> list = am.getRunningTasks(1);
+		if (list != null && list.size() > 0) {
+			ComponentName cpn = list.get(0).topActivity;
+			return cpn.getClassName();
+		}
+		return null;
 	}
 
 	@Override
@@ -692,5 +716,16 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
             unbindService(connection);
         }
         unregisterReceiver(broadcastReceiver);
+        EventBus.getDefault().unregister(this);
     }
+
+	@Subscribe(threadMode = ThreadMode.MAIN)
+	public void onEvent(MessageEvent event) {
+		LogUtil.d("插件响应了事件onEvent");
+	}
+
+	@Subscribe(threadMode = ThreadMode.MAIN)
+	public void onXXXEvent(MessageEvent event) {
+		LogUtil.d("宿主响应了事件 onXXXEvent");
+	}
 }

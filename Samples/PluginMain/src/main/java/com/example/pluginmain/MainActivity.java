@@ -1,6 +1,7 @@
 package com.example.pluginmain;
 
 import android.Manifest;
+import android.arch.lifecycle.Lifecycle;
 import android.content.BroadcastReceiver;
 import android.content.ContentValues;
 import android.content.Context;
@@ -16,6 +17,7 @@ import android.support.annotation.NonNull;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -36,6 +38,10 @@ import com.limpoxe.fairy.util.FileUtil;
 import com.limpoxe.fairy.util.LogUtil;
 import com.limpoxe.fairy.util.ResourceUtil;
 //import com.umeng.analytics.MobclickAgent;
+
+import org.greenrobot.eventbus.EventBus;
+import org.greenrobot.eventbus.Subscribe;
+import org.greenrobot.eventbus.ThreadMode;
 
 import java.io.File;
 import java.io.IOException;
@@ -76,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
-
+        EventBus.getDefault().register(this);
 		setContentView(R.layout.main_activity);
         ButterKnife.bind(this);
 
@@ -109,6 +115,9 @@ public class MainActivity extends AppCompatActivity {
 			@Override
 			public void onClick(View v) {
                 //MobclickAgent.onEvent(MainActivity.this, "test_0");
+
+                //注意Eventbus不能跨进程，要在宿主和插件之间测试EventBus需要使宿主插件在同一个进程
+                EventBus.getDefault().post(new MessageEvent("install_click"));
 
                 if (!isInstalled) {
 					if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
@@ -206,6 +215,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 //MobclickAgent.onEvent(MainActivity.this, "test_3");
                 startActivity(new Intent(MainActivity.this, TestCaseListActivity.class));
+
+                testProvider();
             }
         });
 	}
@@ -300,6 +311,7 @@ public class MainActivity extends AppCompatActivity {
 	protected void onDestroy() {
 		super.onDestroy();
 		unregisterReceiver(pluginInstallEvent);
+        EventBus.getDefault().unregister(this);
 	};
 
 
@@ -344,13 +356,12 @@ public class MainActivity extends AppCompatActivity {
 		//FileUtil.printAll(new File(getApplicationInfo().dataDir));
 
         //MobclickAgent.onResume(this);
-
-        testProvider();
 	}
 
+    /**
+     * 测试在宿主中调用插件的conentProvider
+     */
 	private void testProvider() {
-
-        //测试在宿主中调用插件的conentProvider,
         //因为目标在插件中，所以要先判断插件是否已经安装
         boolean isInstalled = PluginManager.isInstalled("com.example.plugintest");
         boolean isRunning = PluginManager.isRunning("com.example.plugintest");
@@ -399,4 +410,14 @@ public class MainActivity extends AppCompatActivity {
 		LogUtil.d(keyCode);
 		return super.onKeyUp(keyCode, event);
 	}
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onEvent(MessageEvent event) {
+        LogUtil.d("宿主响应了事件 onEvent");
+    }
+
+    @Subscribe(threadMode = ThreadMode.MAIN)
+    public void onXXXEvent(MessageEvent event) {
+        LogUtil.d("宿主响应了事件 onXXXEvent");
+    }
 }

@@ -118,6 +118,8 @@ public class PluginDescriptor implements Serializable {
 
 	private String installedPath;
 
+	private long installationTime;
+
 	private String[] dependencies;
 
 	private ArrayList<String> muliDexList;
@@ -263,10 +265,10 @@ public class PluginDescriptor implements Serializable {
 					if (resId.contains(":")) {
 						String[] names = resId.split(":");
 						packageName = names[0].replace("@", "");
-						id = Integer.parseInt(names[1], 16);
+						id = (int)Long.parseLong(names[1], 16);
 					} else {
 						packageName = descriptor.getPackageName();
-						id = Integer.parseInt(resId.replace("@", ""), 16);
+						id = (int)Long.parseLong(resId.replace("@", ""), 16);
 					}
 
 					Resources resources = null;
@@ -452,7 +454,15 @@ public class PluginDescriptor implements Serializable {
         this.useHostPackageName = useHostPackageName;
     }
 
-    /**
+	public long getInstallationTime() {
+		return installationTime;
+	}
+
+	public void setInstallationTime(long installationTime) {
+		this.installationTime = installationTime;
+	}
+
+	/**
 	 * 需要根据id查询的只有fragment
 	 * @param clazzId
 	 * @return
