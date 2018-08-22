@@ -14,8 +14,6 @@ import com.limpoxe.fairy.util.LogUtil;
 import java.io.File;
 import java.util.List;
 
-import dalvik.system.DexClassLoader;
-
 public class PluginCreator {
 
 	private PluginCreator() {
@@ -28,7 +26,7 @@ public class PluginCreator {
 	 *            插件apk文件路径
 	 * @return
 	 */
-	public static DexClassLoader createPluginClassLoader(String absolutePluginApkPath, boolean isStandalone,
+	public static ClassLoader createPluginClassLoader(String absolutePluginApkPath, boolean isStandalone,
 														 String[] dependences, List<String> pluginApkMultDexPath) {
 
 		String apkParentDir = new File(absolutePluginApkPath).getParent();
@@ -39,28 +37,30 @@ public class PluginCreator {
 		File libDir = new File(apkParentDir, "lib");
 		libDir.mkdirs();
 
+		LogUtil.v(absolutePluginApkPath, optDir.getAbsolutePath(), libDir.getAbsolutePath());
+
 		if (!isStandalone) {//非独立插件
-			return new PluginClassLoader(
+			return new PluginClassLoader("", new RealPluginClassLoader(
 					absolutePluginApkPath,
 					optDir.getAbsolutePath(),
 					libDir.getAbsolutePath(),
 					PluginLoader.class.getClassLoader(),//宿主classloader
 					dependences,//插件依赖的插件
-					null);
+					null));
 		} else {//独立插件
-			return new PluginClassLoader(
+			return new PluginClassLoader("", new RealPluginClassLoader(
 					absolutePluginApkPath,
 					optDir.getAbsolutePath(),
 					libDir.getAbsolutePath(),
 					/*
-			         * In theory this should be the "system" class loader; in practice we
-			         * don't use that and can happily (and more efficiently) use the
-			         * bootstrap class loader.
-			         */
+					 * In theory this should be the "system" class loader; in practice we
+					 * don't use that and can happily (and more efficiently) use the
+					 * bootstrap class loader.
+					 */
 					ClassLoader.getSystemClassLoader().getParent(),//系统classloader
-                    dependences,//通常情况独立插件无子依赖, 此处参数size一般是0，但实际也可以依赖其他基础独立插件包，
-                                // 也即独立插件之间也可以建立依赖关系，前提和非独立插件一样，被依赖的插件不可以包含资源
-					pluginApkMultDexPath);
+					dependences,//通常情况独立插件无子依赖, 此处参数size一般是0，但实际也可以依赖其他基础独立插件包，
+					// 也即独立插件之间也可以建立依赖关系，前提和非独立插件一样，被依赖的插件不可以包含资源
+					pluginApkMultDexPath));
 		}
 
 	}
@@ -208,7 +208,7 @@ public class PluginCreator {
 	 * @return
 	 */
 	public static Context createPluginContext(PluginDescriptor pluginDescriptor, Context base, Resources pluginRes,
-												  DexClassLoader pluginClassLoader) {
+												  ClassLoader pluginClassLoader) {
 		return new PluginContextTheme(pluginDescriptor, base, pluginRes, pluginClassLoader);
 	}
 
@@ -247,7 +247,7 @@ public class PluginCreator {
         if (pluginContext != null) {
             newContext = (PluginContextTheme)PluginCreator.createPluginContext(((PluginContextTheme) pluginContext).getPluginDescriptor(),
                     base, pluginContext.getResources(),
-                    (DexClassLoader) pluginContext.getClassLoader());
+                    (ClassLoader) pluginContext.getClassLoader());
 
             newContext.setPluginApplication((Application) ((PluginContextTheme) pluginContext).getApplicationContext());
 

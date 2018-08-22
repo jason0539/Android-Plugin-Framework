@@ -1,9 +1,11 @@
 package com.example.plugintest.activity;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.Notification;
+import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
@@ -17,18 +19,19 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.sqlite.SQLiteDatabase;
+import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.RemoteException;
+import android.provider.MediaStore;
 import android.support.v4.app.NotificationCompat;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.ActionBar;
 import android.telephony.CellInfo;
 import android.telephony.TelephonyManager;
-import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
@@ -52,7 +55,6 @@ import com.limpoxe.fairy.core.FairyGlobal;
 import com.limpoxe.fairy.core.android.HackActivity;
 import com.limpoxe.fairy.manager.PluginManagerHelper;
 import com.limpoxe.fairy.util.LogUtil;
-//import com.umeng.analytics.MobclickAgent;
 
 import org.greenrobot.eventbus.EventBus;
 import org.greenrobot.eventbus.Subscribe;
@@ -62,11 +64,12 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 
 import butterknife.BindView;
 
-import static com.tencent.bugly.crashreport.inner.InnerAPI.context;
+//import com.umeng.analytics.MobclickAgent;
 
 //import com.example.plugintest.databinding.PluginLauncherBinding;
 
@@ -223,15 +226,23 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
     }
 
     private void testNotification() {
-        NotificationCompat.Builder mBuilder;
-        mBuilder = new NotificationCompat.Builder(this);
-        mBuilder.setSmallIcon(com.example.pluginmain.R.drawable.ic_launcher);
-        mBuilder.setContentTitle("PluginTest Title").setContentText("PluginTest Content")
+		NotificationManager mNotificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
+
+		NotificationCompat.Builder builder = null;
+		if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			NotificationChannel channel = new NotificationChannel("111", "CN111", NotificationManager.IMPORTANCE_HIGH);
+			mNotificationManager.createNotificationChannel(channel);
+			builder = new NotificationCompat.Builder(this, "111");
+		} else {
+			builder = new NotificationCompat.Builder(this);
+		}
+
+		builder.setSmallIcon(com.example.pluginmain.R.drawable.ic_launcher);
+		builder.setContentTitle("PluginTest Title").setContentText("PluginTest Content")
                 .setTicker("PluginTest Ticker");
-        Notification mNotification = mBuilder.build();
+        Notification mNotification = builder.build();
         mNotification.flags = Notification.FLAG_ONGOING_EVENT;
         //mBuilder.setContentIntent()
-        NotificationManager mNotificationManager = (NotificationManager)getSystemService(Context.NOTIFICATION_SERVICE);
         LogUtil.e("NotificationManager.notify");
         mNotificationManager.notify(123, mNotification);
     }
@@ -325,9 +336,11 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 				break;
 			case R.id.onClickPluginTestService:
 				onClickPluginTestService(v);
+				startActivity(new Intent(this, CustomMappingActivity.class));
 				break;
 			case R.id.onClickPluginTestService2:
 				onClickPluginTestService2(v);
+				takePicture(222);
 				break;
 			case R.id.onTestFileProvider:
 				testFileProvider();
@@ -339,14 +352,14 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 		Intent intent = new Intent("com.android.camera.action.CROP");
 
 		//注意修改为自己设备上真实存在的地址
-		File file = new File("/storage/emulated/0/Pictures/Screenshots/1.png");
+		File srcfile = new File("/storage/emulated/0/Pictures/Screenshots/1.png");
 
-		if(!file.exists()) {
-			Toast.makeText(getApplicationContext(), "图片不存在：" + file.getAbsolutePath(), Toast.LENGTH_LONG).show();
+		if(!srcfile.exists()) {
+			Toast.makeText(getApplicationContext(), "图片不存在：" + srcfile.getAbsolutePath(), Toast.LENGTH_LONG).show();
 			return;
 		}
 
-		Uri photoURI = FileProvider.getUriForFile(context, "a.b.c.fileprovider", file);
+		Uri photoURI = FileProvider.getUriForFile(this, "a.b.c.fileprovider", srcfile);
 
 		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
 		intent.setDataAndType(photoURI, "image/*");
@@ -355,8 +368,50 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
 		intent.putExtra("outputX", 80);
 		intent.putExtra("outputY", 80);
 		intent.putExtra("return-data", false);
+		intent.putExtra("outputFormat", Bitmap.CompressFormat.JPEG.toString());
+
+		File output = new File("/storage/emulated/0/Pictures/Screenshots/", System.currentTimeMillis() + "_crop.png");
+		output.getParentFile().mkdirs();
+		output.delete();
+
+		intent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(output));
+
 		startActivityForResult(intent, 111);
 	}
+
+	private void takePicture(final int requestCode) {
+
+		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+			int permissionState = checkSelfPermission(Manifest.permission.CAMERA);
+			if (permissionState != PackageManager.PERMISSION_GRANTED) {
+				if (!shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)) {
+					requestPermissions(new String[]{Manifest.permission.CAMERA}, 10086);
+				} else {
+					Toast.makeText(LauncherActivity.this, "6.+系统, 请在设置中授权摄像头权限", Toast.LENGTH_SHORT).show();
+				}
+				return;
+			}
+		}
+
+		Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+		intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+		File file = new File("/storage/emulated/0/Pictures/Screenshots/image_capture.png");
+		file.getParentFile().mkdirs();
+		file.delete();
+
+		Uri uri;
+		if (Build.VERSION.SDK_INT >= 24) {
+		    uri = FileProvider.getUriForFile(this, "a.b.c.fileprovider", file);
+        } else {
+            uri = Uri.fromFile(file);
+        }
+
+		intent.putExtra(MediaStore.EXTRA_OUTPUT, uri);
+
+		startActivityForResult(intent, requestCode);
+	}
+
 
 	public void onClickHellowrld(View v) {
         //MobclickAgent.onEvent(fakeThisForUmengSdk, "test_4");
@@ -674,14 +729,35 @@ public class LauncherActivity extends BaseActivity implements View.OnClickListen
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+		// return-data = true; bitmap = data.getExtras().getParcelable("data")
+		// return-data = false; String path = data.getData().getPath();
 
         LogUtil.d("onActivityResult", requestCode, resultCode);
 
-        Toast.makeText(getApplicationContext(), "onActivityResult", Toast.LENGTH_LONG).show();
+        if (resultCode == RESULT_OK && requestCode == 111) {
+        	try {
+        		Uri uri = null;
+        		File cropFile = null;
+        		if (Build.VERSION.SDK_INT == 28) {//9.0
+        			uri = data.getData();
+				} else if (Build.VERSION.SDK_INT == 26) {//8.0
+        			uri = Uri.parse(data.getAction());
+				}
+				if (uri != null) {
+        			cropFile = new File(new URI(uri.toString()));
+        			LogUtil.d("cropFile", cropFile.getAbsolutePath() + " " + cropFile.exists());
+				}
+			} catch (Exception e) {
+        		e.printStackTrace();
+			}
+		} else if (resultCode == RESULT_OK && requestCode == 222) {
+			File file = new File("/storage/emulated/0/Pictures/Screenshots/image_capture.png");
+			LogUtil.d("image_capture", file.getAbsolutePath() + " " + file.exists());
 
-//        if (data != null) {
-//            LogUtil.d("onActivityResult data", data.getStringExtra("ret"));
-//        }
+		}
+
+		Toast.makeText(getApplicationContext(), "onActivityResult " + (resultCode == RESULT_OK?"OK":"FAIL"), Toast.LENGTH_LONG).show();
+
     }
 
     public static Activity fakeActivityForUMengSdk(Activity activity) {

@@ -76,6 +76,7 @@ public class PluginInjector {
 	}
 
 	public static void installContentProviders(Context context, Context pluginContext, Collection<PluginProviderInfo> pluginProviderInfos) {
+		LogUtil.d("安装插件中的contentProvider");
 		List<ProviderInfo> providers = new ArrayList<ProviderInfo>();
 		for (PluginProviderInfo pluginProviderInfo : pluginProviderInfos) {
 			ProviderInfo p = new ProviderInfo();
@@ -417,11 +418,10 @@ public class PluginInjector {
 			HackLoadedApk hackLoadedApk = new HackLoadedApk(mLoadedApk);
 			ClassLoader originalLoader = hackLoadedApk.getClassLoader();
 			if (!(originalLoader instanceof HostClassLoader)) {
-				HostClassLoader newLoader = new HostClassLoader("",
-						FairyGlobal.getHostApplication()
-						.getCacheDir().getAbsolutePath(),
-						FairyGlobal.getHostApplication().getCacheDir().getAbsolutePath(),
-						originalLoader);
+				HostClassLoader newLoader = new HostClassLoader("", new RealHostClassLoader("",
+						FairyGlobal.getHostApplication().getCacheDir().getAbsolutePath(),/**这里这两个目录参数无实际意义**/
+						FairyGlobal.getHostApplication().getCacheDir().getAbsolutePath(),/**这里这两个目录参数无实际意义**/
+						originalLoader));
 				hackLoadedApk.setClassLoader(newLoader);
 			}
 		} else {

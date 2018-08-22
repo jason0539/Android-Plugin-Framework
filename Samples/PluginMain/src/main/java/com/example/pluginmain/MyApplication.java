@@ -27,5 +27,8 @@ public class MyApplication extends PluginApplication {
             ARouter.openDebug();
         }
         ARouter.init(this);
+
+        //Just for test custom Mapping Processor
+        FairyGlobal.registStubMappingProcessor(new TestCoustProcessor());
 	}
 }

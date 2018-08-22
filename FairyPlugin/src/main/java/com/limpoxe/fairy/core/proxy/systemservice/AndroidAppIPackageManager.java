@@ -10,6 +10,7 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Handler;
 import android.text.TextUtils;
 
 import com.limpoxe.fairy.content.LoadedPlugin;
@@ -19,7 +20,6 @@ import com.limpoxe.fairy.content.PluginProviderInfo;
 import com.limpoxe.fairy.core.FairyGlobal;
 import com.limpoxe.fairy.core.PluginIntentResolver;
 import com.limpoxe.fairy.core.PluginLauncher;
-import com.limpoxe.fairy.core.PluginLoader;
 import com.limpoxe.fairy.core.android.HackActivityThread;
 import com.limpoxe.fairy.core.android.HackApplicationPackageManager;
 import com.limpoxe.fairy.core.android.HackParceledListSlice;
@@ -58,7 +58,6 @@ public class AndroidAppIPackageManager extends MethodProxy {
         sMethods.put("resolveIntent", new resolveIntent());
         sMethods.put("resolveService", new resolveService());
         sMethods.put("getComponentEnabledSetting", new getComponentEnabledSetting());
-        sMethods.put("resolveContentProvider", new resolveContentProvider());
         sMethods.put("getXml", new getXml());
 
     }
@@ -70,6 +69,22 @@ public class AndroidAppIPackageManager extends MethodProxy {
         HackActivityThread.setPackageManager(androidAppIPackageManagerStubProxyProxy);
         HackApplicationPackageManager hackApplicationPackageManager = new HackApplicationPackageManager(manager);
         hackApplicationPackageManager.setPM(androidAppIPackageManagerStubProxyProxy);
+
+        /**
+         *
+         *框架尚未初始化的时候，此方法调用，一定是在ActivityThread.handleBindApplication方法中
+         *则此时是正在初始化宿主manifest文件中配置的组件，此时不能执行"优先返回插件的providerInfo"的逻辑
+         *否则会出现插件provider在宿主app启动时被意外初始化
+         * 因此这个hook需要通过post的方式，将执行时机推迟到application的oncreate之后执行
+         }
+         */
+        new Handler().post(new Runnable() {
+            @Override
+            public void run() {
+                sMethods.put("resolveContentProvider", new resolveContentProvider());
+            }
+        });
+
         LogUtil.d("安装完成");
     }
 
@@ -365,6 +380,8 @@ public class AndroidAppIPackageManager extends MethodProxy {
                     while (iterator.hasNext()) {
                         HashMap.Entry<String, PluginProviderInfo> entry = iterator.next();
                         if (args[0].equals(entry.getValue().getAuthority())) {
+                            //如果插件中有重复的配置，先到先得
+                            LogUtil.d("如果插件中有重复的配置，先到先得 authorities ", args[0]);
                             info = entry.getValue();
                             pluginDescriptor = descriptor;
                             break;
@@ -420,8 +437,7 @@ public class AndroidAppIPackageManager extends MethodProxy {
         info.taskAffinity = null;//需要时再加上
         info.theme = pluginDescriptor.getApplicationTheme();
         info.flags = info.flags | ApplicationInfo.FLAG_HAS_CODE;
-        //需要时再添加
-        //info.nativeLibraryDir = new File(pluginDescriptor.getInstalledPath()).getParentFile().getAbsolutePath() + "/lib";
+        info.nativeLibraryDir = new File(pluginDescriptor.getInstalledPath()).getParentFile().getAbsolutePath() + "/lib";
         String targetSdkVersion = pluginDescriptor.getTargetSdkVersion();
         if (!TextUtils.isEmpty(targetSdkVersion)) {
             info.targetSdkVersion = Integer.valueOf(targetSdkVersion);
