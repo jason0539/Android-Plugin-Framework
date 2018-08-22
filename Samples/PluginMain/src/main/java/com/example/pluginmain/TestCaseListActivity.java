@@ -52,7 +52,6 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
         findViewById(R.id.sendbroadcast).setOnClickListener(this);
         findViewById(R.id.notification).setOnClickListener(this);
         findViewById(R.id.startActivity).setOnClickListener(this);
-
         findViewById(R.id.startActivityForResult).setOnClickListener(this);
 
         findViewById(R.id.loadWeb).setOnClickListener(this);
@@ -155,13 +154,10 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
             testNotification();
         } else if (viewId == R.id.startActivity) {
             testStartActivity1();
-<<<<<<< HEAD
         } else if (viewId == R.id.startActivityForResult) {
             testStartActivityForResult();
-=======
         } else if (viewId == R.id.loadWeb) {
             testLoadWeb();
->>>>>>> 503cd998ba4eb7ff9f9f1675838da4d42dd32e8d
         }
 
     }
@@ -216,7 +212,6 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
         startActivity(intent);
     }
 
-<<<<<<< HEAD
     private void testStartActivityForResult() {
         //也可以直接构造Intent，指定打开插件中的某个Activity
         ARouter.getInstance().build("/test/result").navigation(this,110);
@@ -228,10 +223,10 @@ public class TestCaseListActivity extends AppCompatActivity implements View.OnCl
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         Toast.makeText(this,"requestCode = " + requestCode + ", resultCode = " + resultCode,Toast.LENGTH_SHORT).show();
-=======
-    private void testLoadWeb() {
-        ((WebView)findViewById(R.id.webview)).loadUrl("http://www.baidu.com/");
->>>>>>> 503cd998ba4eb7ff9f9f1675838da4d42dd32e8d
+    }
+
+        private void testLoadWeb() {
+            ((WebView)findViewById(R.id.webview)).loadUrl("http://www.baidu.com/");
     }
 
     @Override
