@@ -101,6 +101,7 @@
             android:padding="15dp"
             android:text="startActivity测试"
             android:textSize="16sp"/>
+
         <Button
             android:id="@+id/startActivityForResult"
             android:layout_width="wrap_content"
@@ -109,6 +110,7 @@
             android:padding="15dp"
             android:text="startActivityForResult测试"
             android:textSize="16sp"/>
+
         <Button
             android:id="@+id/loadWeb"
             android:layout_width="wrap_content"
@@ -122,6 +124,7 @@
             android:id="@+id/webview"
             android:layout_width="match_parent"
             android:layout_height="100dp"></WebView>
+
     </LinearLayout>
 
 </ScrollView>
