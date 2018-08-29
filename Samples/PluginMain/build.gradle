@@ -103,7 +103,7 @@ dependencies {
     compile 'com.tuotuo.solo:tuoARouter:1.4'//base on 1.2.1.1
     annotationProcessor 'com.alibaba:arouter-compiler:1.1.2.1'
 
-    //implementation('com.limpoxe.fairy:FairyPlugin:0.0.63-snapshot@aar')//通过后缀@aar来中断依赖传递
+    //implementation('com.limpoxe.fairy:FairyPlugin:0.0.64-snapshot@aar')//通过后缀@aar来中断依赖传递
     implementation project(':FairyPlugin')
     //optional
     //compile('com.limpoxe.support:android-servicemanager:1.0.5@aar')
